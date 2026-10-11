@@ -147,3 +147,14 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Next.js
+next-env.d.ts
+/out/
+.vercel
+
+# Local embedded database (PGlite)
+/.data/
+
+# Copied from node_modules by scripts/copy-vendor.mjs
+/public/vendor/

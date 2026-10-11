@@ -1,0 +1,118 @@
+import Link from "next/link";
+import { DifficultyBadge, Tag } from "@/components/badges";
+import { requireOnboardedUser } from "@/lib/auth/require-goals";
+import { PHASE_INFO, type ItemKind } from "@/lib/engine/planner";
+import { PATTERN_BY_ID } from "@/lib/problems/patterns";
+import { PROBLEM_BY_SLUG } from "@/lib/problems";
+import { getTrackState } from "@/lib/track";
+
+const KIND_LABEL: Record<ItemKind, { label: string; tone: "accent" | "good" | "warn" | "neutral" }> = {
+  new: { label: "New", tone: "accent" },
+  review: { label: "Review", tone: "good" },
+  mixed: { label: "Mixed", tone: "neutral" },
+  bridge: { label: "Bridge", tone: "warn" },
+};
+
+const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", review: "review", mixed: "mixed" };
+
+export default async function TodayPage({ searchParams }: PageProps<"/today">) {
+  const { user, goals } = await requireOnboardedUser();
+  const { welcome } = await searchParams;
+  const { plan, attempts } = await getTrackState(user.id, goals);
+  const phase = PHASE_INFO[plan.phase];
+  const totalMinutes = plan.items.reduce((m, i) => m + i.minutes, 0);
+  const todayAttempts = attempts.filter((a) => plan.doneToday.includes(a.problemSlug));
+
+  return (
+    <main className="mx-auto w-full max-w-3xl px-4 py-10">
+      {welcome && (
+        <div className="card mb-6 border-accent bg-accent-soft p-4 text-sm">
+          Your plan is ready. It re-plans after every attempt, so just work down the list.
+        </div>
+      )}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Today</h1>
+          <p className="mt-1 text-sm text-muted">
+            {phase.label}: {phase.focus}
+          </p>
+        </div>
+        <div className="text-right text-sm text-muted">
+          {plan.daysLeft !== null && (
+            <div>
+              <span className="text-lg font-semibold text-ink">{plan.daysLeft}</span> days to your interview
+            </div>
+          )}
+          <div>
+            About {totalMinutes} of your {plan.minutesBudget} minutes a day
+          </div>
+        </div>
+      </div>
+
+      {plan.stuck.length > 0 && (
+        <div className="card mt-6 border-warn bg-warn-soft p-4 text-sm">
+          {plan.stuck.map((p) => (
+            <p key={p}>
+              <strong>{PATTERN_BY_ID[p].name}:</strong> two misses in a row. Refresh the idea first: {PATTERN_BY_ID[p].summary}{" "}
+              <Link className="underline" href={`/problems#${p}`}>
+                See the pattern
+              </Link>
+            </p>
+          ))}
+        </div>
+      )}
+
+      <ol className="mt-6 space-y-3">
+        {plan.items.map((item, i) => {
+          const p = PROBLEM_BY_SLUG.get(item.slug)!;
+          const kind = KIND_LABEL[item.kind];
+          return (
+            <li key={item.slug}>
+              <Link
+                href={`/problems/${item.slug}?mode=${MODE_FOR[item.kind]}`}
+                className="card flex items-start gap-4 p-4 transition-colors hover:border-accent"
+              >
+                <span className="mt-0.5 w-5 text-sm text-muted">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{item.hidePattern ? `Mixed problem ${i + 1}` : p.title}</span>
+                    <Tag tone={kind.tone}>{kind.label}</Tag>
+                    <DifficultyBadge difficulty={p.difficulty} />
+                    {!item.hidePattern && <Tag>{PATTERN_BY_ID[p.pattern].name}</Tag>}
+                  </div>
+                  <p className="mt-1 text-sm text-muted">{item.reason}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted">~{item.minutes} min</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ol>
+      {plan.items.length === 0 && (
+        <div className="card mt-6 p-6 text-center text-muted">
+          {plan.doneToday.length ? "You're done for today. Reviews and new problems will be waiting tomorrow." : "Nothing is open right now."}{" "}
+          <Link href="/problems" className="text-accent hover:underline">
+            Browse the problem bank
+          </Link>
+        </div>
+      )}
+
+      {todayAttempts.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-sm font-medium text-muted">Done today</h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {[...new Map(todayAttempts.map((a) => [a.problemSlug, a])).values()].map((a) => (
+              <li key={a.problemSlug} className="flex items-center gap-2">
+                <span className={a.solved ? "text-good" : "text-bad"}>{a.solved ? "✓" : "✗"}</span>
+                <Link href={`/problems/${a.problemSlug}`} className="hover:underline">
+                  {PROBLEM_BY_SLUG.get(a.problemSlug)?.title}
+                </Link>
+                {a.mode === "review" && <Tag tone="good">Review</Tag>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </main>
+  );
+}
