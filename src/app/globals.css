@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f0efec;
+  --border: #e3e1dc;
+  --text: #1c1b19;
+  --muted: #6b6862;
+  --accent: #2f5bd3;
+  --accent-soft: #e6ecfb;
+  --good: #1f8a4c;
+  --good-soft: #e3f4ea;
+  --warn: #b26b00;
+  --warn-soft: #fbf0dc;
+  --bad: #c2362f;
+  --bad-soft: #fbe6e4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211;
+    --surface: #1b1b1a;
+    --surface-2: #242422;
+    --border: #33322f;
+    --text: #ecebe7;
+    --muted: #9b988f;
+    --accent: #7b9cf5;
+    --accent-soft: #1f2a46;
+    --good: #4fc27f;
+    --good-soft: #17301f;
+    --warn: #e0a447;
+    --warn-soft: #33270f;
+    --bad: #ef6b63;
+    --bad-soft: #3a1a18;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-primary {
+  @apply btn bg-accent text-white hover:opacity-90;
+}
+@utility btn-secondary {
+  @apply btn border border-line bg-surface text-ink hover:bg-surface-2;
+}
+@utility btn-ghost {
+  @apply btn text-muted hover:bg-surface-2 hover:text-ink;
+}
+@utility card {
+  @apply rounded-lg border border-line bg-surface;
+}
+@utility input {
+  @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent;
+}
+@utility label {
+  @apply mb-1.5 block text-sm font-medium;
+}
+.prose-statement p {
+  @apply my-2 leading-relaxed;
+}
+.prose-statement code {
+  @apply rounded bg-surface-2 px-1 py-0.5 font-mono text-[0.88em];
+}
+.prose-statement pre {
+  @apply my-2 overflow-x-auto rounded-md bg-surface-2 p-3 font-mono text-xs;
+}
+.prose-statement pre code {
+  @apply bg-transparent p-0;
+}
+.prose-statement ul {
+  @apply my-2 list-disc pl-5;
+}
+.prose-statement ol {
+  @apply my-2 list-decimal pl-5;
+}
