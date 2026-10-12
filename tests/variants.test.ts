@@ -66,13 +66,23 @@ describe("variant store", () => {
 
   it("only keeps drafts whose reference passes their own tests, in a locked-down process", async () => {
     const { checkReference } = await import("@/lib/variants");
-    expect(checkReference(draftToVariant(draft())).verdict).toBe("accepted");
+    expect((await checkReference(draftToVariant(draft()))).verdict).toBe("accepted");
     const wrong = draft({ tests: [...draft().tests.slice(0, 4), { input: "[[1,4],5]", expected: "2", sample: false }] });
-    expect(checkReference(draftToVariant(wrong)).verdict).not.toBe("accepted");
+    expect((await checkReference(draftToVariant(wrong))).verdict).not.toBe("accepted");
     const target = path.join(tmpdir(), `variant-escape-${Date.now()}`);
     const sneaky = draft({ reference: `function countPairs() { require("fs").writeFileSync(${JSON.stringify(target)}, "x"); return 0; }` });
-    expect(checkReference(draftToVariant(sneaky)).verdict).not.toBe("accepted");
+    expect((await checkReference(draftToVariant(sneaky))).verdict).not.toBe("accepted");
     expect(existsSync(target)).toBe(false);
+    // No route to the network or the real process, even through the global object.
+    for (const escape of [
+      `typeof fetch === "function" || typeof process === "object" || typeof require === "function"`,
+      `(function () { try { return !!Function("return this")(); } catch { return false; } })()`,
+      `(function () { try { return !![].map.constructor("return process")(); } catch { return false; } })()`,
+      `(function () { try { return typeof this === "object" && this !== null; } catch { return false; } })()`,
+    ]) {
+      const probe = draft({ reference: `function countPairs(nums, k) { if (${escape}) return -1; let c = 0; const seen = new Map(); for (const x of nums) { c += seen.get(k - x) ?? 0; seen.set(x, (seen.get(x) ?? 0) + 1); } return c; }` });
+      expect((await checkReference(draftToVariant(probe))).verdict, escape).toBe("accepted");
+    }
   });
 
   it("stores a checked variant, hands it out once per user, and records the review on it", async () => {
