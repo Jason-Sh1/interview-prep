@@ -95,6 +95,8 @@ export interface PlannerInput {
    * from question_frequency). When omitted, the bank's own company lists stand in.
    */
   questionFrequency?: Map<string, number>;
+  /** Open focus-area drills from mock feedback, newest first. */
+  drills?: { problemSlug: string; title: string; drill: string }[];
 }
 
 /** 0..1: how strongly the targets are reported to ask this exact problem. */
@@ -103,7 +105,7 @@ function askedScore(problem: Problem, input: PlannerInput): number {
   return problemAskedByTargets(problem.companies, input.goals.targetCompanies, input.companies) ? 0.75 : 0;
 }
 
-export type ItemKind = "new" | "review" | "mixed" | "bridge";
+export type ItemKind = "new" | "review" | "mixed" | "bridge" | "drill";
 
 export interface PlanItem {
   slug: string;
@@ -242,7 +244,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     w.novelty * c.novelty -
     w.recent * c.recent;
 
-  type Candidate = Omit<PlanItem, "reason"> & { overdueDays: number; fresh: boolean };
+  type Candidate = Omit<PlanItem, "reason"> & { overdueDays: number; fresh: boolean; drill?: { title: string; drill: string } };
   const candidates: Candidate[] = [];
   const endToday = endOfDayIn(now, tz);
 
@@ -313,6 +315,34 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     });
   }
 
+  // Drills from mock feedback: a focus area practiced on a related problem.
+  // They rank just under bridges; the pattern spread keeps them from crowding the day.
+  for (const d of input.drills ?? []) {
+    const p = bySlug.get(d.problemSlug);
+    if (!p || doneSet.has(p.slug) || candidates.some((c) => c.slug === p.slug)) continue;
+    const components: Weights = {
+      weakness: weakness(p.pattern, skills),
+      frequency: freq(p),
+      fit: 1,
+      review: 0,
+      interleave: 0,
+      recent: recentlySeen(p.slug),
+      novelty: 0,
+    };
+    candidates.push({
+      slug: p.slug,
+      pattern: p.pattern,
+      kind: "drill",
+      hidePattern: false,
+      minutes: ITEM_MINUTES[p.difficulty],
+      score: total(components) + 0.8,
+      components,
+      overdueDays: 0,
+      fresh: false,
+      drill: { title: d.title, drill: d.drill },
+    });
+  }
+
   // New problems in unlocked patterns, within reach of the current rating.
   // Stuck patterns only get their bridge until it is solved.
   const taken = new Set([...candidates.map((c) => c.slug), ...input.cards.map((c) => c.problemSlug)]);
@@ -374,8 +404,9 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     if (best === -1) break;
     const [c] = pool.splice(best, 1);
     const problem = bySlug.get(c.slug)!;
-    const { overdueDays, fresh, ...item } = c;
-    items.push({ ...item, reason: reasonFor(item, w, { input, problem, overdueDays, fresh }) });
+    const { overdueDays, fresh, drill, ...item } = c;
+    const reason = drill ? `From your mock, ${drill.title.toLowerCase()}: ${drill.drill}` : reasonFor(item, w, { input, problem, overdueDays, fresh });
+    items.push({ ...item, reason });
     used += c.minutes;
     perPattern.set(c.pattern, (perPattern.get(c.pattern) ?? 0) + 1);
   }

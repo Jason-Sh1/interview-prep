@@ -109,6 +109,14 @@ export function ReportView({
                     See the pattern
                   </Link>
                 </li>
+              ) : ch.kind === "drill" ? (
+                <li key={i}>
+                  Drill for {ch.title.toLowerCase()}:{" "}
+                  <Link href={`/problems/${ch.slug}?mode=learn`} className="text-accent hover:underline">
+                    {ch.problemTitle}
+                  </Link>
+                  , in today&apos;s plan.
+                </li>
               ) : (
                 <li key={i}>
                   {ch.title} is due today as a re-solve.{" "}

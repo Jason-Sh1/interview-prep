@@ -5,7 +5,7 @@ import { PATTERN_BY_ID, PATTERNS } from "@/lib/problems/patterns";
 import { complexityOptions, sampleTests, toPublic } from "@/lib/problems/public";
 import { LANGUAGES, starterCode } from "@/lib/runner/drivers";
 import { judge0Enabled } from "@/lib/runner/judge0";
-import { getProblemHistory } from "@/lib/track";
+import { getOpenDrills, getProblemHistory } from "@/lib/track";
 import { Workspace, type WorkspaceMode } from "./Workspace";
 
 export default async function ProblemPage({ params, searchParams }: PageProps<"/problems/[slug]">) {
@@ -14,7 +14,8 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
   const problem = PROBLEM_BY_SLUG.get(slug);
   if (!problem) notFound();
   const { user, goals } = await requireOnboardedUser();
-  const history = await getProblemHistory(user.id, slug);
+  const [history, drills] = await Promise.all([getProblemHistory(user.id, slug), getOpenDrills(user.id)]);
+  const drill = drills.find((d) => d.problemSlug === slug) ?? null;
 
   const reviewDue = !!history.card && history.card.due <= new Date();
   const mode: WorkspaceMode =
@@ -41,6 +42,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
       complexityChoices={complexityOptions(problem)}
       previousAttempts={history.attempts.length}
       solvedBefore={history.attempts.some((a) => a.solved)}
+      drill={drill ? { title: drill.title, drill: drill.drill } : null}
     />
   );
 }

@@ -15,9 +15,10 @@ const KIND_LABEL: Record<ItemKind, { label: string; tone: "accent" | "good" | "w
   review: { label: "Review", tone: "good" },
   mixed: { label: "Mixed", tone: "neutral" },
   bridge: { label: "Bridge", tone: "warn" },
+  drill: { label: "Drill", tone: "warn" },
 };
 
-const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", review: "review", mixed: "mixed" };
+const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", review: "review", mixed: "mixed", drill: "learn" };
 
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
