@@ -4,7 +4,7 @@ import "server-only";
 // the background after a solve; a draft is kept only when its reference
 // solution passes every one of its own tests.
 
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,25 +31,47 @@ export interface Variant {
 
 const toVariant = (r: typeof schema.problemVariants.$inferSelect): Variant => ({ id: r.id, baseSlug: r.baseSlug, data: r.data as unknown as VariantData });
 
+// Hides the host from the reference: strict mode plus module-scope names
+// shadowing the CommonJS wrapper's arguments and the globals that reach the
+// network, the file system or other processes. With code generation from
+// strings disabled, the global object can't be fetched back through
+// Function("return this"). Each needs an explicit `= undefined`: a bare
+// `var require;` keeps the wrapper argument's value.
+const LOCKDOWN = `"use strict";
+var require = undefined, module = undefined, exports = undefined, __filename = undefined, __dirname = undefined, process = undefined, global = undefined, globalThis = undefined, fetch = undefined, WebSocket = undefined, Buffer = undefined, setImmediate = undefined;
+`;
+
 /**
  * Runs a variant's reference solution against its tests in a separate Node
- * process with the permission model on (no file writes, child processes or
- * workers) and a time limit. The code is ours, written by our own model call,
- * but it still never runs inside the server process.
+ * process with a time limit. The permission model blocks file writes, child
+ * processes and workers; the lockdown prologue above removes the routes to
+ * the network, which the permission model on Node 22 doesn't cover. The code
+ * is ours, written by our own model call, but it still never runs inside the
+ * server process, and the check never blocks the server's event loop.
  */
-export function checkReference(v: VariantData, timeoutMs = 10_000): RunOutcome {
+export async function checkReference(v: VariantData, timeoutMs = 10_000): Promise<RunOutcome> {
   const dir = mkdtempSync(join(tmpdir(), "ip-variant-"));
   try {
     const file = join(dir, "main.js");
-    writeFileSync(file, buildProgram(v.signature, "javascript", v.reference, v.tests));
+    writeFileSync(file, LOCKDOWN + buildProgram(v.signature, "javascript", v.reference, v.tests));
     const major = Number(process.versions.node.split(".")[0]);
-    const res = spawnSync(
-      process.execPath,
-      [major >= 23 ? "--permission" : "--experimental-permission", `--allow-fs-read=${file}`, "--no-warnings", "--max-old-space-size=256", file],
-      { timeout: timeoutMs, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: { NODE_ENV: "production" } },
-    );
-    const timedOut = res.error?.message.includes("ETIMEDOUT") ?? false;
-    return gradeOutput(v.signature, v.tests, res.stdout ?? "", res.stderr ?? "", "local", { timedOut });
+    const args = [
+      major >= 23 ? "--permission" : "--experimental-permission",
+      `--allow-fs-read=${file}`,
+      "--disallow-code-generation-from-strings",
+      "--no-warnings",
+      "--max-old-space-size=256",
+      file,
+    ];
+    const res = await new Promise<{ stdout: string; stderr: string; timedOut: boolean }>((resolve) => {
+      execFile(
+        process.execPath,
+        args,
+        { timeout: timeoutMs, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, env: { NODE_ENV: "production" } },
+        (err, stdout, stderr) => resolve({ stdout: stdout ?? "", stderr: stderr ?? "", timedOut: !!err?.killed }),
+      );
+    });
+    return gradeOutput(v.signature, v.tests, res.stdout, res.stderr, "local", { timedOut: res.timedOut });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -116,7 +138,7 @@ export async function createVariant(slug: string, draft = draftVariant): Promise
   for (let i = 0; i < DRAFT_TRIES; i++) {
     try {
       const data = draftToVariant(await draft(base, existing.map((v) => `${v.data.title}: ${v.data.twist}`)));
-      const check = checkReference(data);
+      const check = await checkReference(data);
       if (check.verdict !== "accepted") throw new Error(`Reference ${check.verdict}: ${check.passed}/${check.total} tests`);
       const [row] = await db
         .insert(schema.problemVariants)
