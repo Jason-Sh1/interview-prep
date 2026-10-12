@@ -189,6 +189,8 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
   // A variant keeps the base problem's slug, pattern and rating; its tests and complexity are its own.
   const variant = input.variantId ? await variantFor(input.slug, input.variantId) : null;
   if (input.variantId && !variant) throw new Error("Unknown variant");
+  // Variants are only ever served as reviews, so a variant attempt is a review whatever the client says.
+  const mode = variant ? "review" : input.mode;
   const problem = variant?.problem ?? PROBLEM_BY_SLUG.get(input.slug);
   if (!problem) throw new Error("Unknown problem");
 
@@ -224,7 +226,7 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
     failStreak: 0,
   };
   // Reviews move the rating less than first attempts: they test memory as much as skill.
-  const after = updateSkill(before, problem.rating, score, { fastTrack, weight: input.mode === "review" ? 0.5 : 1 });
+  const after = updateSkill(before, problem.rating, score, { fastTrack, weight: mode === "review" ? 0.5 : 1 });
   const failStreak = solved ? 0 : before.failStreak + 1;
 
   await db
@@ -284,7 +286,7 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
     userId,
     problemSlug: problem.slug,
     pattern: problem.pattern,
-    mode: input.mode,
+    mode,
     language: input.language,
     solved,
     gaveUp: input.gaveUp,

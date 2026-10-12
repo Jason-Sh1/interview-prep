@@ -127,10 +127,11 @@ describe("variant store", () => {
       code: "def count_pairs(nums, target): ...",
       variantId: v!.id,
     };
-    const result = await track.recordAttempt("u-var", { ...input, mode: "review" });
+    // Even if the client claims a first attempt, a variant counts as a review (half the rating move).
+    const result = await track.recordAttempt("u-var", { ...input, mode: "learn" });
     expect(result.solved).toBe(true);
     const [row] = await db.select().from(schema.attempts);
-    expect(row).toMatchObject({ problemSlug: base.slug, variantId: v!.id, complexityCorrect: true });
+    expect(row).toMatchObject({ problemSlug: base.slug, variantId: v!.id, complexityCorrect: true, mode: "review" });
     expect(await variants.pickVariant("u-var", base.slug)).toBeNull();
 
     // A variant id that belongs to another problem is refused.
