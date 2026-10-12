@@ -22,6 +22,14 @@ export default async function Home() {
       title: "Mixed practice and stuck detection",
       body: "Once a pattern is learned, problems arrive unlabeled so you practice spotting it. Two misses in a row drop you to a bridge problem.",
     },
+    {
+      title: "Live voice mock interviews",
+      body: "Talk through a problem with an AI interviewer that sees your code as you type, then get a report on your code and your communication. Weak spots go straight back into your plan.",
+    },
+    {
+      title: "AI-assisted coding rounds",
+      body: "Practice the new rounds where an AI assistant is allowed: a small repo, a chat assistant that sometimes slips in a bug, and grading on how you prompt, review and own the code.",
+    },
   ];
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-16">
@@ -44,7 +52,9 @@ export default async function Home() {
           </div>
         ))}
       </div>
-      <p className="mt-10 text-sm text-muted">Coming next: live voice mock interviews and feedback on your code and communication.</p>
+      <p className="mt-10 text-sm text-muted">
+        Company profiles are checked against recent interview reports every week, so the plan follows how each company interviews now.
+      </p>
     </main>
   );
 }

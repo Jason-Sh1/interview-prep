@@ -5,6 +5,8 @@ import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { PHASE_INFO, type ItemKind } from "@/lib/engine/planner";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
+import { listAssistedSessions } from "@/lib/assisted";
+import { listMockSessions } from "@/lib/mock";
 import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
 import { getTrackState } from "@/lib/track";
 
@@ -20,10 +22,19 @@ const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", revi
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
   const { welcome } = await searchParams;
-  const [{ plan, attempts }, whatsNew] = await Promise.all([
+  const [{ plan, attempts }, whatsNew, mocks, rounds] = await Promise.all([
     getTrackState(user.id, goals),
     getWhatsNew(goals.targetCompanies).catch(() => [] as WhatsNewItem[]),
+    listMockSessions(user.id),
+    listAssistedSessions(user.id),
   ]);
+  // A server component renders once per request, so reading the clock here is safe.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const lastMock = mocks[0]?.startedAt ?? null;
+  const lastRound = rounds[0]?.startedAt ?? null;
+  // Spec 4.2: the final stretch favors mocks; suggest one if none in the last three days.
+  const suggestMock = plan.phase === "final" && (!lastMock || now - lastMock.getTime() > 3 * 86_400_000);
   const phase = PHASE_INFO[plan.phase];
   const totalMinutes = plan.items.reduce((m, i) => m + i.minutes, 0);
   const todayAttempts = attempts.filter((a) => plan.doneToday.includes(a.problemSlug));
@@ -67,6 +78,19 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
         </div>
       )}
 
+      {suggestMock && (
+        <Link href="/mock" className="card mt-6 flex items-center gap-4 border-accent bg-accent-soft p-4 transition-colors hover:border-accent">
+          <div className="flex-1">
+            <div className="font-medium">Do a mock interview today</div>
+            <p className="mt-1 text-sm text-muted">
+              You&apos;re in the final stretch. Talking through a problem under time pressure is the part solo practice can&apos;t build, and the report
+              feeds your weak spots back into this plan.
+            </p>
+          </div>
+          <span className="btn-primary shrink-0">Start a mock</span>
+        </Link>
+      )}
+
       <ol className="mt-6 space-y-3">
         {plan.items.map((item, i) => {
           const p = PROBLEM_BY_SLUG.get(item.slug)!;
@@ -101,6 +125,24 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
           </Link>
         </div>
       )}
+
+      <section className="mt-10">
+        <h2 className="text-sm font-medium text-muted">Other interview formats</h2>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <FormatCard
+            href="/mock"
+            title="Mock interview"
+            body="A live voice interview on one problem, with a report on your code and communication."
+            last={lastMock}
+          />
+          <FormatCard
+            href="/assisted"
+            title="AI-assisted round"
+            body="A small repo and an AI assistant, graded on how you prompt, review and own the code."
+            last={lastRound}
+          />
+        </div>
+      </section>
 
       {whatsNew.length > 0 && <WhatsNew items={whatsNew} targets={goals.targetCompanies} />}
 
@@ -154,5 +196,17 @@ function WhatsNew({ items, targets }: { items: WhatsNewItem[]; targets: string[]
         ))}
       </ul>
     </section>
+  );
+}
+
+function FormatCard({ href, title, body, last }: { href: string; title: string; body: string; last: Date | null }) {
+  return (
+    <Link href={href} className="card block p-4 text-sm transition-colors hover:border-accent">
+      <div className="font-medium">{title}</div>
+      <p className="mt-1 text-muted">{body}</p>
+      <p className="mt-2 text-xs text-muted" suppressHydrationWarning>
+        {last ? `Last done ${last.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "Not tried yet"}
+      </p>
+    </Link>
   );
 }
