@@ -43,6 +43,13 @@
       "when": 1791782405816,
       "tag": "0005_goals_time_zone",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791783607315,
+      "tag": "0006_question_frequency",
+      "breakpoints": true
     }
   ]
 }

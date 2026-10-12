@@ -90,6 +90,17 @@ export interface PlannerInput {
   problems: Problem[];
   /** Live company profiles from the research job; the built-in estimates when omitted. */
   companies?: CompanyMap;
+  /**
+   * How strongly the target companies are reported to ask each problem (0..1,
+   * from question_frequency). When omitted, the bank's own company lists stand in.
+   */
+  questionFrequency?: Map<string, number>;
+}
+
+/** 0..1: how strongly the targets are reported to ask this exact problem. */
+function askedScore(problem: Problem, input: PlannerInput): number {
+  if (input.questionFrequency) return input.questionFrequency.get(problem.slug) ?? 0;
+  return problemAskedByTargets(problem.companies, input.goals.targetCompanies, input.companies) ? 0.75 : 0;
 }
 
 export type ItemKind = "new" | "review" | "mixed" | "bridge";
@@ -148,6 +159,12 @@ function companyNames(targets: string[], companies: CompanyMap): string {
   return `${names.slice(0, 2).join(", ")} and others`;
 }
 
+function askedPhrase(score: number): string | null {
+  if (score >= 1) return "are reported to ask this problem often";
+  if (score > 0) return "ask this problem or a close variant";
+  return null;
+}
+
 function reasonFor(
   item: Omit<PlanItem, "reason">,
   w: Weights,
@@ -170,7 +187,7 @@ function reasonFor(
     [
       w.frequency * c.frequency,
       input.goals.targetCompanies.length
-        ? `${companyNames(input.goals.targetCompanies, input.companies ?? COMPANY_BY_ID)} ${problemAskedByTargets(problem.companies, input.goals.targetCompanies, input.companies) ? "ask this problem or a close variant" : `lean on ${pattern}`}.`
+        ? `${companyNames(input.goals.targetCompanies, input.companies ?? COMPANY_BY_ID)} ${askedPhrase(askedScore(problem, input)) ?? `lean on ${pattern}`}.`
         : `${pattern} shows up often across companies.`,
     ],
     [
@@ -209,12 +226,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
   }
   const stuck = PATTERNS.map((p) => p.id).filter((p) => isUnlocked(p, skills) && isStuck(p, skills));
 
-  const freq = (p: Problem) =>
-    Math.min(
-      1,
-      patternFrequency(input.goals.targetCompanies, p.pattern, input.companies) +
-        (problemAskedByTargets(p.companies, input.goals.targetCompanies, input.companies) ? 0.3 : 0),
-    );
+  const freq = (p: Problem) => Math.min(1, patternFrequency(input.goals.targetCompanies, p.pattern, input.companies) + 0.4 * askedScore(p, input));
   const recentlySeen = (slug: string) => {
     const t = lastTouched.get(slug);
     if (!t) return 0;

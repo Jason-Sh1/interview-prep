@@ -1,10 +1,12 @@
 import "server-only";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db, ensureMigrated, schema } from "../db";
 import { COMPANIES, COMPANY_BY_ID, type CompanyMap } from "../engine/companies";
+import { PROBLEMS } from "../problems";
 import { researchCompany } from "./claude";
 import { diffProfiles, profileFromEstimate, toCompanyProfile, type ProfileData, type Source } from "./profiles";
+import { diffQuestions, estimatedQuestions, type Frequency, type QuestionReport } from "./questions";
 
 // The research job (spec 4.6): versioned company profiles with sources, a
 // review queue, and the live profiles the planner uses. A run researches each
@@ -74,9 +76,45 @@ export const getLiveCompanies = cache(async (): Promise<CompanyMap> => {
   return out;
 });
 
+/** The question lists stored for the given profile versions, by version id. */
+async function questionsFor(profileIds: number[]): Promise<Map<number, QuestionReport[]>> {
+  const out = new Map<number, QuestionReport[]>();
+  if (!profileIds.length) return out;
+  const rows = await db.select().from(schema.questionFrequency).where(inArray(schema.questionFrequency.profileId, profileIds)).orderBy(schema.questionFrequency.id);
+  for (const r of rows) {
+    const list = out.get(r.profileId) ?? [];
+    list.push({
+      title: r.title,
+      ...(r.url ? { url: r.url } : {}),
+      problemSlug: r.problemSlug,
+      frequency: r.frequency as Frequency,
+      ...(r.lastSeen ? { lastSeen: r.lastSeen } : {}),
+      sources: r.sources,
+    });
+    out.set(r.profileId, list);
+  }
+  return out;
+}
+
+/** A version's questions, or the problem bank's estimate when it has none. */
+function questionsOrEstimate(companyId: string, version: ProfileVersion | undefined, stored: Map<number, QuestionReport[]>): QuestionReport[] {
+  const list = version ? stored.get(version.id) : undefined;
+  if (list?.length) return list;
+  return estimatedQuestions(version?.data.name ?? COMPANY_BY_ID[companyId]?.name ?? companyId, PROBLEMS);
+}
+
+/** The question_frequency the planner uses, per company: approved research where there is some, the bank's estimate elsewhere. */
+export const getLiveQuestions = cache(async (): Promise<Map<string, QuestionReport[]>> => {
+  const approved = await getApprovedProfiles().catch(() => new Map<string, ProfileVersion>());
+  const stored = await questionsFor([...approved.values()].map((v) => v.id)).catch(() => new Map<number, QuestionReport[]>());
+  return new Map(COMPANIES.map((c) => [c.id, questionsOrEstimate(c.id, approved.get(c.id), stored)]));
+});
+
 export interface QueueItem {
   pending: ProfileVersion;
   current: ProfileVersion | null;
+  questions: QuestionReport[];
+  currentQuestions: QuestionReport[];
 }
 
 export async function getReviewQueue(): Promise<QueueItem[]> {
@@ -85,7 +123,16 @@ export async function getReviewQueue(): Promise<QueueItem[]> {
     db.select().from(schema.companyProfiles).where(eq(schema.companyProfiles.status, "pending")).orderBy(desc(schema.companyProfiles.createdAt)),
     getApprovedProfiles(),
   ]);
-  return pending.map((r) => ({ pending: toVersion(r), current: approved.get(r.companyId) ?? null }));
+  const stored = await questionsFor([...pending.map((r) => r.id), ...[...approved.values()].map((v) => v.id)]);
+  return pending.map((r) => {
+    const current = approved.get(r.companyId) ?? null;
+    return {
+      pending: toVersion(r),
+      current,
+      questions: stored.get(r.id) ?? [],
+      currentQuestions: questionsOrEstimate(r.companyId, current ?? undefined, stored),
+    };
+  });
 }
 
 /** Approves or rejects a pending version. Approving also rejects older pending versions of that company. */
@@ -244,7 +291,8 @@ async function freshApproved(): Promise<Map<string, ProfileVersion>> {
 async function researchOne(runId: number, companyId: string, current: ProfileVersion | undefined): Promise<string> {
   const base = current?.data ?? profileFromEstimate(COMPANY_BY_ID[companyId]);
   const found = await researchCompany(companyId, base);
-  const changes = diffProfiles(base, found.data);
+  const baseQuestions = questionsOrEstimate(companyId, current, await questionsFor(current ? [current.id] : []));
+  const changes = [...diffProfiles(base, found.data), ...diffQuestions(baseQuestions, found.questions)];
   const now = new Date();
   if (!changes.length && current) {
     // Nothing new: the current version is confirmed as of today.
@@ -255,18 +303,38 @@ async function researchOne(runId: number, companyId: string, current: ProfileVer
     .select({ max: sql<number>`coalesce(max(${schema.companyProfiles.version}), 0)` })
     .from(schema.companyProfiles)
     .where(eq(schema.companyProfiles.companyId, companyId));
-  await db.insert(schema.companyProfiles).values({
-    companyId,
-    version: Number(max) + 1,
-    status: "pending",
-    generator: "claude",
-    data: found.data as unknown as Record<string, unknown>,
-    changes: found.confidence === "low" ? [...changes, "Low confidence: the sources were thin."] : changes,
-    sources: found.sources,
-    runId,
-    verifiedAt: now,
-  });
+  const [inserted] = await db
+    .insert(schema.companyProfiles)
+    .values({
+      companyId,
+      version: Number(max) + 1,
+      status: "pending",
+      generator: "claude",
+      data: found.data as unknown as Record<string, unknown>,
+      changes: found.confidence === "low" ? [...changes, "Low confidence: the sources were thin."] : changes,
+      sources: found.sources,
+      runId,
+      verifiedAt: now,
+    })
+    .returning({ id: schema.companyProfiles.id });
+  await saveQuestions(inserted.id, companyId, found.questions);
   return "queued";
+}
+
+export async function saveQuestions(profileId: number, companyId: string, questions: QuestionReport[]): Promise<void> {
+  if (!questions.length) return;
+  await db.insert(schema.questionFrequency).values(
+    questions.map((q) => ({
+      profileId,
+      companyId,
+      title: q.title,
+      url: q.url ?? null,
+      problemSlug: q.problemSlug,
+      frequency: q.frequency,
+      lastSeen: q.lastSeen ?? null,
+      sources: q.sources,
+    })),
+  );
 }
 
 /** Starts and finishes a run in one call (the CLI and cron). */

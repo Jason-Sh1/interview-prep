@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { COMPANY_BY_ID, emphasisFor, patternFrequency, problemAskedByTargets } from "@/lib/engine/companies";
+import { buildPlan } from "@/lib/engine/planner";
+import { PROBLEMS } from "@/lib/problems";
 import { cleanEmphasis, diffProfiles, profileFromEstimate, verifiedSources, type ProfileData } from "@/lib/research/profiles";
+import { cleanQuestions, diffQuestions, estimatedQuestions, matchProblem, problemFrequency, type QuestionReport } from "@/lib/research/questions";
 
 describe("research profiles", () => {
   it("cleans emphasis from the model", () => {
@@ -61,13 +64,79 @@ describe("research profiles", () => {
   });
 });
 
+describe("question frequency", () => {
+  const src = { url: "https://example.com/a", title: "A" };
+  const verify = (url: string) => (url === src.url ? src : null);
+
+  it("matches reported questions to bank problems by link or title", () => {
+    expect(matchProblem("anything", "https://leetcode.com/problems/two-sum/description/", PROBLEMS)?.slug).toBe("pair-with-target-sum");
+    expect(matchProblem("1. Two Sum", undefined, PROBLEMS)?.slug).toBe("pair-with-target-sum");
+    expect(matchProblem("Not A Real Problem", undefined, PROBLEMS)).toBeNull();
+  });
+
+  it("keeps only sourced questions and merges duplicates at the higher frequency", () => {
+    const out = cleanQuestions(
+      [
+        { title: "Two Sum", frequency: "low", sourceUrl: src.url },
+        { title: "two sum", url: "https://leetcode.com/problems/two-sum/", frequency: "high", sourceUrl: src.url },
+        { title: "Invented", frequency: "high", sourceUrl: "https://made-up.example" },
+        { title: "Unbanked", url: "javascript:alert(1)", frequency: "medium", sourceUrl: src.url },
+      ],
+      verify,
+      PROBLEMS,
+    );
+    expect(out.map((q) => [q.title, q.problemSlug, q.frequency, q.url])).toEqual([
+      ["Two Sum", "pair-with-target-sum", "high", undefined],
+      ["Unbanked", null, "medium", undefined],
+    ]);
+  });
+
+  it("estimates from the bank and reports changes", () => {
+    const est = estimatedQuestions("Meta", PROBLEMS);
+    expect(est.find((q) => q.problemSlug === "pair-with-target-sum")).toMatchObject({ title: "Two Sum", frequency: "medium" });
+    const next: QuestionReport[] = [
+      { title: "Two Sum", problemSlug: "pair-with-target-sum", frequency: "high", sources: [src] },
+      { title: "Rare One", problemSlug: null, frequency: "low", sources: [src] },
+    ];
+    expect(diffQuestions(est, next)).toEqual(["Asked more often: Two Sum."]);
+    expect(diffQuestions(next, next)).toEqual([]);
+  });
+
+  it("pulls reported problems up the plan", () => {
+    const byCompany = new Map<string, QuestionReport[]>([["stripe", [{ title: "X", problemSlug: PROBLEMS[0].slug, frequency: "high", sources: [] }]]]);
+    const qf = problemFrequency(["stripe"], byCompany);
+    expect(qf.get(PROBLEMS[0].slug)).toBe(1);
+    const base = {
+      now: new Date("2026-10-12T12:00:00Z"),
+      goals: { targetCompanies: ["stripe"], interviewDate: null, hoursPerWeek: 70 },
+      skills: {},
+      attempts: [],
+      cards: [],
+      problems: PROBLEMS,
+    };
+    const score = (plan: ReturnType<typeof buildPlan>) => plan.items.find((i) => i.slug === PROBLEMS[0].slug)?.components.frequency ?? null;
+    const withQf = score(buildPlan({ ...base, questionFrequency: qf }));
+    const without = score(buildPlan({ ...base, questionFrequency: new Map() }));
+    expect(without).not.toBeNull();
+    expect(withQf!).toBeGreaterThan(without!);
+  });
+});
+
 // The job end to end against an embedded database, with the Claude step faked.
 const fake = vi.hoisted(() => ({ changeMeta: true, fail: new Set<string>() }));
 vi.mock("@/lib/research/claude", () => ({
   researchCompany: async (id: string, current: ProfileData) => {
     if (fake.fail.has(id)) throw new Error("search failed");
     const data = id === "meta" && fake.changeMeta ? { ...current, ai: "some-rounds", emphasis: { ...current.emphasis, graphs: 1 } } : current;
-    return { data, sources: [{ url: `https://example.com/${id}`, title: `${id} report` }], confidence: "high" };
+    const source = { url: `https://example.com/${id}`, title: `${id} report` };
+    const questions =
+      id === "meta" && fake.changeMeta
+        ? [
+            { title: "Two Sum", url: "https://leetcode.com/problems/two-sum/", problemSlug: "pair-with-target-sum", frequency: "high", sources: [source] },
+            { title: "Some Unbanked Puzzle", problemSlug: null, frequency: "medium", sources: [source] },
+          ]
+        : [];
+    return { data, sources: [source], questions, confidence: "high" };
   },
 }));
 
@@ -98,6 +167,11 @@ describe("research job", () => {
     expect(queue[0].pending.version).toBe(2);
     expect(queue[0].current?.version).toBe(1);
     expect(queue[0].pending.changes).toContain("AI allowed in some rounds.");
+    expect(queue[0].pending.changes).toContain("Asked more often: Two Sum.");
+    expect(queue[0].pending.changes).toContain("Newly reported questions: Some Unbanked Puzzle.");
+    expect(queue[0].questions.map((q) => q.title)).toEqual(["Two Sum", "Some Unbanked Puzzle"]);
+    // Until approved, the planner keeps the bank's estimate for Meta.
+    expect((await r.getLiveQuestions()).get("meta")?.find((q) => q.problemSlug === "pair-with-target-sum")?.frequency).toBe("medium");
     expect(await r.pendingCount()).toBe(1);
 
     await r.reviewProfile(queue[0].pending.id, "approved", "admin@example.com");
@@ -106,6 +180,12 @@ describe("research job", () => {
     expect(history.map((v) => [v.version, v.status])).toEqual([
       [2, "approved"],
       [1, "approved"],
+    ]);
+
+    const live = (await r.getLiveQuestions()).get("meta")!;
+    expect(live.map((q) => [q.title, q.frequency])).toEqual([
+      ["Two Sum", "high"],
+      ["Some Unbanked Puzzle", "medium"],
     ]);
 
     const news = await r.getWhatsNew(["google", "meta"]);

@@ -324,3 +324,32 @@ export const companyProfiles = pgTable(
     index("company_profiles_status_idx").on(t.status, t.reviewedAt),
   ],
 );
+
+/**
+ * Which problems a company is reported to ask (spec 4.6), one row per
+ * question per profile version, so frequencies go through the same review
+ * as the profile they belong to. The planner uses the rows of each company's
+ * latest approved version; companies without any fall back to the problem
+ * bank's own lists.
+ */
+export const questionFrequency = pgTable(
+  "question_frequency",
+  {
+    id: serial("id").primaryKey(),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => companyProfiles.id, { onDelete: "cascade" }),
+    companyId: text("company_id").notNull(),
+    title: text("title").notNull(),
+    /** Link to the public problem; we never store its text. */
+    url: text("url"),
+    /** The bank problem modeled on it, when there is one. */
+    problemSlug: text("problem_slug"),
+    /** "high", "medium" or "low". */
+    frequency: text("frequency").notNull(),
+    /** When it was last reported, as the source gives it (YYYY-MM or YYYY-MM-DD). */
+    lastSeen: text("last_seen"),
+    sources: jsonb("sources").$type<{ url: string; title: string; published?: string }[]>().notNull().default([]),
+  },
+  (t) => [index("question_frequency_profile_idx").on(t.profileId), index("question_frequency_company_idx").on(t.companyId, t.problemSlug)],
+);
