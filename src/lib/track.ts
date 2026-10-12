@@ -11,6 +11,7 @@ import { attemptScore, INITIAL_RATING, INITIAL_UNCERTAINTY, isFastTrack, updateS
 import type { FeedbackReport } from "./feedback/analyze";
 import { planMockUpdate, type TrackChange } from "./feedback/track-update";
 import { PROBLEM_BY_SLUG, PROBLEMS } from "./problems";
+import { getLiveCompanies } from "./research";
 import type { PatternId, Problem } from "./problems/types";
 import type { Language } from "./runner/drivers";
 import { judge0Enabled, runOnJudge0 } from "./runner/judge0";
@@ -91,12 +92,13 @@ export interface TrackState {
 }
 
 export async function getTrackState(userId: string, goals: Goals, now = new Date()): Promise<TrackState> {
-  const [skills, attempts, cards] = await Promise.all([
+  const [skills, attempts, cards, companies] = await Promise.all([
     getSkills(userId),
     getAttemptSummaries(userId),
     getCards(userId),
+    getLiveCompanies(),
   ]);
-  const plan = buildPlan({ now, goals, skills, attempts, cards, problems: PROBLEMS });
+  const plan = buildPlan({ now, goals, skills, attempts, cards, problems: PROBLEMS, companies });
   return { goals, skills, attempts, cards, plan };
 }
 

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { Tag } from "@/components/badges";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
-import { COMPANIES, COMPANY_BY_ID, emphasisFor } from "@/lib/engine/companies";
+import { COMPANIES, emphasisFor } from "@/lib/engine/companies";
 import { mediumSolveChance, patternStatus, skillOf } from "@/lib/engine/mastery";
 import { PHASE_INFO } from "@/lib/engine/planner";
 import { PATTERNS } from "@/lib/problems";
+import { SourceList } from "@/components/SourceList";
+import { getApprovedProfiles, getLiveCompanies, type ProfileVersion } from "@/lib/research";
+import { isAdmin } from "@/lib/research/admin";
+import { AI_POLICY_LABEL } from "@/lib/research/profiles";
 import { getTrackState } from "@/lib/track";
 
 /** Cell color for a 0–1 skill value, from red through amber to green. */
@@ -15,14 +19,20 @@ function heat(v: number): string {
 
 export default async function ProgressPage() {
   const { user, goals } = await requireOnboardedUser();
-  const { skills, attempts, cards, plan } = await getTrackState(user.id, goals);
-  const targets = goals.targetCompanies.length ? goals.targetCompanies.map((t) => COMPANY_BY_ID[t]).filter(Boolean) : COMPANIES.slice(0, 3);
+  const [{ skills, attempts, cards, plan }, companies, approved] = await Promise.all([
+    getTrackState(user.id, goals),
+    getLiveCompanies(),
+    getApprovedProfiles().catch(() => new Map<string, ProfileVersion>()),
+  ]);
+  const targets = (goals.targetCompanies.length ? goals.targetCompanies : COMPANIES.slice(0, 3).map((c) => c.id))
+    .map((t) => companies[t])
+    .filter(Boolean);
 
   const readiness = targets.map((c) => {
     let num = 0;
     let den = 0;
     for (const p of PATTERNS) {
-      const w = emphasisFor(c.id, p.id);
+      const w = emphasisFor(c.id, p.id, companies);
       num += w * mediumSolveChance(p.id, skills);
       den += w;
     }
@@ -52,7 +62,13 @@ export default async function ProgressPage() {
     <main className="mx-auto w-full max-w-5xl px-4 py-10">
       <h1 className="text-2xl font-semibold">Skill map</h1>
       <p className="mt-1 text-sm text-muted">
-        Ratings per pattern against what your target companies ask. Company profiles are starting estimates until the weekly research job keeps them current.
+        Ratings per pattern against what your target companies ask. Company profiles are kept current by a weekly research job; each card says when its
+        profile was last verified.{" "}
+        {isAdmin(user.email) && (
+          <Link href="/research" className="text-accent hover:underline">
+            Review company research
+          </Link>
+        )}
       </p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-4">
@@ -76,6 +92,7 @@ export default async function ProgressPage() {
                 <div className="h-2 rounded" style={{ width: `${value * 100}%`, background: heat(value) }} />
               </div>
               <p className="mt-2 text-xs text-muted">{company.style}</p>
+              <CompanyMeta version={approved.get(company.id)} />
             </div>
           ))}
         </div>
@@ -120,7 +137,7 @@ export default async function ProgressPage() {
                     </div>
                   </td>
                   {targets.map((c) => {
-                    const w = emphasisFor(c.id, p.id);
+                    const w = emphasisFor(c.id, p.id, companies);
                     const gap = w * (1 - chance);
                     return (
                       <td key={c.id} className="text-center">
@@ -183,6 +200,19 @@ export default async function ProgressPage() {
         )}
       </section>
     </main>
+  );
+}
+
+function CompanyMeta({ version }: { version?: ProfileVersion }) {
+  if (!version || version.generator === "seed" || !version.verifiedAt) {
+    return <p className="mt-2 text-xs text-muted">Starting estimate, not yet verified by research.</p>;
+  }
+  return (
+    <p className="mt-2 text-xs text-muted" suppressHydrationWarning>
+      {version.data.ai !== "unknown" && <>{AI_POLICY_LABEL[version.data.ai]} · </>}
+      Verified {version.verifiedAt.toLocaleDateString(undefined, { dateStyle: "medium" })} ·{" "}
+      <SourceList sources={version.sources} compact />
+    </p>
   );
 }
 

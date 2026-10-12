@@ -11,7 +11,7 @@
 
 import { PATTERN_BY_ID, PATTERNS } from "../problems/patterns";
 import type { Difficulty, PatternId, Problem } from "../problems/types";
-import { COMPANY_BY_ID, patternFrequency, problemAskedByTargets } from "./companies";
+import { COMPANY_BY_ID, patternFrequency, problemAskedByTargets, type CompanyMap } from "./companies";
 import {
   isLearned,
   isProblemOpen,
@@ -81,6 +81,8 @@ export interface PlannerInput {
   /** FSRS cards; `reps` 0 means never reviewed (e.g. added by mock feedback). */
   cards: { problemSlug: string; due: Date; reps?: number }[];
   problems: Problem[];
+  /** Live company profiles from the research job; the built-in estimates when omitted. */
+  companies?: CompanyMap;
 }
 
 export type ItemKind = "new" | "review" | "mixed" | "bridge";
@@ -145,8 +147,8 @@ function endOfDay(d: Date): Date {
   return e;
 }
 
-function companyNames(targets: string[]): string {
-  const names = targets.map((t) => COMPANY_BY_ID[t]?.name).filter(Boolean) as string[];
+function companyNames(targets: string[], companies: CompanyMap): string {
+  const names = targets.map((t) => companies[t]?.name).filter(Boolean) as string[];
   if (names.length <= 2) return names.join(" and ");
   return `${names.slice(0, 2).join(", ")} and others`;
 }
@@ -173,7 +175,7 @@ function reasonFor(
     [
       w.frequency * c.frequency,
       input.goals.targetCompanies.length
-        ? `${companyNames(input.goals.targetCompanies)} ${problemAskedByTargets(problem.companies, input.goals.targetCompanies) ? "ask this problem or a close variant" : `lean on ${pattern}`}.`
+        ? `${companyNames(input.goals.targetCompanies, input.companies ?? COMPANY_BY_ID)} ${problemAskedByTargets(problem.companies, input.goals.targetCompanies, input.companies) ? "ask this problem or a close variant" : `lean on ${pattern}`}.`
         : `${pattern} shows up often across companies.`,
     ],
     [
@@ -214,8 +216,8 @@ export function buildPlan(input: PlannerInput): DailyPlan {
   const freq = (p: Problem) =>
     Math.min(
       1,
-      patternFrequency(input.goals.targetCompanies, p.pattern) +
-        (problemAskedByTargets(p.companies, input.goals.targetCompanies) ? 0.3 : 0),
+      patternFrequency(input.goals.targetCompanies, p.pattern, input.companies) +
+        (problemAskedByTargets(p.companies, input.goals.targetCompanies, input.companies) ? 0.3 : 0),
     );
   const recentlySeen = (slug: string) => {
     const t = lastTouched.get(slug);
