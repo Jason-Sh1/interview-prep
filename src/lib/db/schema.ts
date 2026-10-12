@@ -138,8 +138,28 @@ export const attempts = pgTable(
     ratingBefore: real("rating_before").notNull(),
     ratingAfter: real("rating_after").notNull(),
     code: text("code"),
+    /** Set when this attempt was a review on an AI-written variant (problem_variants). */
+    variantId: integer("variant_id"),
   },
   (t) => [index("attempts_user_finished_idx").on(t.userId, t.finishedAt)],
+);
+
+/**
+ * Review variants of bank problems (spec 4.2): changed constraints or a
+ * follow-up twist, written by Claude and kept only if the reference passes
+ * its own tests. Shared by every user; each user gets one they haven't done.
+ */
+export const problemVariants = pgTable(
+  "problem_variants",
+  {
+    id: serial("id").primaryKey(),
+    baseSlug: text("base_slug").notNull(),
+    /** VariantData from src/lib/variants/shape.ts. */
+    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("problem_variants_base_idx").on(t.baseSlug)],
 );
 
 /** FSRS review card per solved problem (state from ts-fsrs). */
