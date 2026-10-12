@@ -2,8 +2,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
+import { PROBLEMS } from "../problems";
 import { PATTERNS } from "../problems/patterns";
 import { AI_POLICIES, cleanEmphasis, verifiedSources, type ProfileData, type Source } from "./profiles";
+import { FREQUENCIES, cleanQuestions, type QuestionReport } from "./questions";
 
 // The research step of spec 4.6: Claude searches the web for recent reports on
 // a company's coding interviews, then a second call turns its notes into a
@@ -25,7 +27,8 @@ Finish with notes covering, with the source URL for each claim:
 1. The current coding loop: rounds, formats, lengths, by level where it differs.
 2. AI tool policy in coding rounds.
 3. Which algorithm patterns come up most and least, with any frequency data.
-4. Anything new in the last few months a candidate should know.`;
+4. Specific problems candidates report being asked (public problem names, with LeetCode links where they exist) and how often each comes up.
+5. Anything new in the last few months a candidate should know.`;
 
 const PARSE_SYSTEM = `You turn research notes into a structured company interview profile for a prep platform's planner. Only use what the notes support. Where the notes give no evidence on a pattern, keep the current weight. Cite only URLs that appear in the notes.`;
 
@@ -38,12 +41,24 @@ const parseSchema = z.object({
     .describe("A weight for every pattern with evidence; omit patterns with none"),
   notes: z.array(z.string()).describe("Up to three short, dated notes a candidate should know that aren't in the current profile, e.g. 'Since March 2026 one round allows an AI assistant.' Empty if nothing is new"),
   sources: z.array(z.object({ url: z.string(), title: z.string(), published: z.string().optional().describe("YYYY-MM or YYYY-MM-DD if known") })).describe("The sources the profile rests on, most important first, at most eight"),
+  questions: z
+    .array(
+      z.object({
+        title: z.string().describe("The public problem's name, e.g. 'Merge Intervals'"),
+        url: z.string().optional().describe("Link to the public problem (e.g. its LeetCode page), if known"),
+        frequency: z.enum(FREQUENCIES).describe("high: many recent reports; medium: a few; low: one or two"),
+        lastSeen: z.string().optional().describe("YYYY-MM or YYYY-MM-DD of the latest report, if known"),
+        sourceUrl: z.string().describe("The URL of the source that reports it, from the pages the searches returned"),
+      }),
+    )
+    .describe("Problems candidates report being asked recently, most frequent first, at most twenty. Empty if the notes name none"),
   confidence: z.enum(["high", "medium", "low"]).describe("How well the sources support this profile"),
 });
 
 export interface ResearchResult {
   data: ProfileData;
   sources: Source[];
+  questions: QuestionReport[];
   confidence: "high" | "medium" | "low";
 }
 
@@ -124,7 +139,9 @@ export async function researchCompany(companyId: string, current: ProfileData, n
   });
   const sources = verifiedSources(p.sources, seen).slice(0, 8);
   if (!sources.length) throw new Error("No source in the profile matched a search result");
+  const verify = (url: string) => verifiedSources([{ url, title: "" }], seen)[0] ?? null;
   return {
+    questions: cleanQuestions(p.questions, verify, PROBLEMS),
     data: { name: current.name, style: p.style || current.style, loop: p.loop, ai: p.ai, emphasis, notes: p.notes.slice(0, 3) },
     sources,
     confidence: p.confidence,

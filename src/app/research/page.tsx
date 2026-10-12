@@ -5,6 +5,7 @@ import { PATTERNS } from "@/lib/problems/patterns";
 import { getApprovedProfiles, getReviewQueue, listRuns, researchEnabled, seedProfiles, type ProfileVersion } from "@/lib/research";
 import { requireAdmin } from "@/lib/research/admin";
 import { AI_POLICY_LABEL, EMPHASIS_THRESHOLD } from "@/lib/research/profiles";
+import { FREQUENCY_LABEL, type QuestionReport } from "@/lib/research/questions";
 import { SourceList } from "@/components/SourceList";
 import { reviewProfileAction } from "./actions";
 import { RunButton } from "./RunButton";
@@ -57,8 +58,8 @@ export default async function ResearchPage() {
         <p className="mt-1 text-sm text-muted">Nothing waiting for review.</p>
       ) : (
         <div className="mt-2 space-y-4">
-          {queue.map(({ pending, current }) => (
-            <QueueCard key={pending.id} pending={pending} current={current} />
+          {queue.map((item) => (
+            <QueueCard key={item.pending.id} {...item} />
           ))}
         </div>
       )}
@@ -139,10 +140,21 @@ export default async function ResearchPage() {
   );
 }
 
-function QueueCard({ pending, current }: { pending: ProfileVersion; current: ProfileVersion | null }) {
-  const before = current?.data;
+function QueueCard({
+  pending,
+  current,
+  questions,
+  currentQuestions,
+}: {
+  pending: ProfileVersion;
+  current: ProfileVersion | null;
+  questions: QuestionReport[];
+  currentQuestions: QuestionReport[];
+}) {
+  const before = new Map(currentQuestions.map((q) => [q.problemSlug ?? q.title, q.frequency]));
+  const prev = current?.data;
   const after = pending.data;
-  const moved = PATTERNS.map((p) => ({ p, a: before?.emphasis[p.id] ?? 0.3, b: after.emphasis[p.id] ?? 0.3 })).filter(
+  const moved = PATTERNS.map((p) => ({ p, a: prev?.emphasis[p.id] ?? 0.3, b: after.emphasis[p.id] ?? 0.3 })).filter(
     (x) => Math.abs(x.b - x.a) >= EMPHASIS_THRESHOLD - 1e-9,
   );
   return (
@@ -164,9 +176,9 @@ function QueueCard({ pending, current }: { pending: ProfileVersion; current: Pro
       <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
         <div>
           <div className="text-xs font-medium text-muted">Now</div>
-          <p className="mt-0.5">{before?.style ?? "—"}</p>
-          {before?.loop && <p className="mt-1 text-muted">{before.loop}</p>}
-          <p className="mt-1 text-muted">{AI_POLICY_LABEL[before?.ai ?? "unknown"]}</p>
+          <p className="mt-0.5">{prev?.style ?? "—"}</p>
+          {prev?.loop && <p className="mt-1 text-muted">{prev.loop}</p>}
+          <p className="mt-1 text-muted">{AI_POLICY_LABEL[prev?.ai ?? "unknown"]}</p>
         </div>
         <div>
           <div className="text-xs font-medium text-muted">Proposed</div>
@@ -193,6 +205,46 @@ function QueueCard({ pending, current }: { pending: ProfileVersion; current: Pro
                 <td className={b > a ? "text-good" : "text-bad"}>{b.toFixed(2)}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      )}
+
+      {questions.length > 0 && (
+        <table className="mt-3 text-sm">
+          <thead className="text-left text-xs text-muted">
+            <tr>
+              <th className="pr-4 font-medium">Reported question</th>
+              <th className="pr-4 font-medium">Now</th>
+              <th className="pr-4 font-medium">Proposed</th>
+              <th className="font-medium">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {questions.map((q) => {
+              const was = before.get(q.problemSlug ?? q.title);
+              return (
+                <tr key={q.problemSlug ?? q.title}>
+                  <td className="pr-4">
+                    {q.url ? (
+                      <a href={q.url} target="_blank" rel="noreferrer" className="hover:underline">
+                        {q.title}
+                      </a>
+                    ) : (
+                      q.title
+                    )}
+                    {!q.problemSlug && <span className="text-xs text-muted"> (not in the bank)</span>}
+                  </td>
+                  <td className="pr-4 text-muted">{was ? FREQUENCY_LABEL[was] : "—"}</td>
+                  <td className={`pr-4 ${was !== q.frequency ? "font-medium" : ""}`}>
+                    {FREQUENCY_LABEL[q.frequency]}
+                    {q.lastSeen && <span className="text-xs text-muted"> · {q.lastSeen}</span>}
+                  </td>
+                  <td>
+                    <SourceList sources={q.sources} compact />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

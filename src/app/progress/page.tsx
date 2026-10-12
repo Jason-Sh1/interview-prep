@@ -6,7 +6,8 @@ import { mediumSolveChance, patternStatus, skillOf } from "@/lib/engine/mastery"
 import { PHASE_INFO } from "@/lib/engine/planner";
 import { PATTERNS } from "@/lib/problems";
 import { SourceList } from "@/components/SourceList";
-import { getApprovedProfiles, getLiveCompanies, type ProfileVersion } from "@/lib/research";
+import { getApprovedProfiles, getLiveCompanies, getLiveQuestions, type ProfileVersion } from "@/lib/research";
+import { FREQUENCY_LABEL, type QuestionReport } from "@/lib/research/questions";
 import { isAdmin } from "@/lib/research/admin";
 import { AI_POLICY_LABEL } from "@/lib/research/profiles";
 import { getTrackState } from "@/lib/track";
@@ -19,11 +20,13 @@ function heat(v: number): string {
 
 export default async function ProgressPage() {
   const { user, goals } = await requireOnboardedUser();
-  const [{ skills, attempts, cards, plan }, companies, approved] = await Promise.all([
+  const [{ skills, attempts, cards, plan }, companies, approved, questions] = await Promise.all([
     getTrackState(user.id, goals),
     getLiveCompanies(),
     getApprovedProfiles().catch(() => new Map<string, ProfileVersion>()),
+    getLiveQuestions(),
   ]);
+  const solvedSlugs = new Set(attempts.filter((a) => a.solved).map((a) => a.problemSlug));
   const targets = (goals.targetCompanies.length ? goals.targetCompanies : COMPANIES.slice(0, 3).map((c) => c.id))
     .map((t) => companies[t])
     .filter(Boolean);
@@ -92,6 +95,7 @@ export default async function ProgressPage() {
                 <div className="h-2 rounded" style={{ width: `${value * 100}%`, background: heat(value) }} />
               </div>
               <p className="mt-2 text-xs text-muted">{company.style}</p>
+              <MostAsked questions={questions.get(company.id) ?? []} solved={solvedSlugs} />
               <CompanyMeta version={approved.get(company.id)} />
             </div>
           ))}
@@ -213,6 +217,36 @@ function CompanyMeta({ version }: { version?: ProfileVersion }) {
       Verified {version.verifiedAt.toLocaleDateString(undefined, { dateStyle: "medium" })} ·{" "}
       <SourceList sources={version.sources} compact />
     </p>
+  );
+}
+
+function MostAsked({ questions, solved }: { questions: QuestionReport[]; solved: Set<string> }) {
+  if (!questions.length) return null;
+  return (
+    <div className="mt-3">
+      <div className="text-xs font-medium text-muted">Most asked</div>
+      <ul className="mt-1 space-y-0.5 text-xs">
+        {questions.slice(0, 4).map((q) => (
+          <li key={q.problemSlug ?? q.title} className="flex items-baseline gap-1.5">
+            <span title={FREQUENCY_LABEL[q.frequency]} className={q.frequency === "high" ? "text-bad" : q.frequency === "medium" ? "text-warn" : "text-muted"}>
+              ●
+            </span>
+            {q.problemSlug ? (
+              <Link href={`/problems/${q.problemSlug}`} className="hover:underline">
+                {q.title}
+              </Link>
+            ) : q.url ? (
+              <a href={q.url} target="_blank" rel="noreferrer" className="hover:underline">
+                {q.title}
+              </a>
+            ) : (
+              <span>{q.title}</span>
+            )}
+            {q.problemSlug && solved.has(q.problemSlug) && <span className="text-good">✓</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
