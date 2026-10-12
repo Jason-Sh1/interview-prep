@@ -226,3 +226,48 @@ export const feedbackReports = pgTable("feedback_reports", {
   trackChanges: jsonb("track_changes").$type<Record<string, unknown>[]>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ---------------------------------------------------------------------------
+// AI-assisted coding rounds (spec 4.5)
+
+/** One AI-assisted round: the task, how it ended, and its report. */
+export const assistedSessions = pgTable(
+  "assisted_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull(),
+    minutes: integer("minutes").notNull(),
+    /** "claude" or "scripted" (the no-key practice assistant). */
+    assistant: text("assistant").notNull(),
+    /** The scripted assistant's state (planted bugs so far). */
+    assistantState: jsonb("assistant_state").$type<Record<string, unknown>>().notNull().default({}),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+    finalFiles: jsonb("final_files").$type<Record<string, string>>(),
+    explanation: text("explanation"),
+    /** Visible and hidden test results at the end. */
+    testResults: jsonb("test_results").$type<Record<string, unknown>>(),
+    /** The AssistedReport from src/lib/assisted/grade.ts, once built. */
+    report: jsonb("report").$type<Record<string, unknown>>(),
+  },
+  (t) => [index("assisted_sessions_user_started_idx").on(t.userId, t.startedAt)],
+);
+
+/** The round's timeline: prompts, replies (with planted bugs), snapshots, pastes and test runs. */
+export const assistedEvents = pgTable(
+  "assisted_events",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => assistedSessions.id, { onDelete: "cascade" }),
+    t: integer("t").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("assisted_events_session_t_idx").on(t.sessionId, t.t)],
+);

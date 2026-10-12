@@ -7,7 +7,7 @@ import type { TrackChange } from "@/lib/feedback/track-update";
 import { codeAt, fmtClock, sessionStats, transcript } from "@/lib/interview/timeline";
 import type { InterviewerKind, MockConfig, SessionEvent, VoiceMode } from "@/lib/interview/types";
 import type { Difficulty } from "@/lib/problems/types";
-import { ReportPending, ReportView } from "./Report";
+import { MockReportPending, ReportView } from "./Report";
 
 interface Props {
   sessionId: string;
@@ -62,7 +62,7 @@ export function Recap(props: Props) {
       {props.report ? (
         <ReportView report={props.report.report} trackChanges={props.report.trackChanges} onJump={setT} />
       ) : (
-        <ReportPending sessionId={props.sessionId} usesClaude={props.usesClaude} />
+        <MockReportPending sessionId={props.sessionId} usesClaude={props.usesClaude} />
       )}
 
       <h2 className="mt-8 text-lg font-semibold">By the numbers</h2>
