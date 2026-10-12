@@ -34,6 +34,8 @@ interface Props {
   interviewer: InterviewerKind;
   /** Session clock (ms) when the page rendered on the server. */
   elapsedAtRender: number;
+  /** Session clock (ms) when Start was first pressed; null if it hasn't been yet. */
+  startT: number | null;
 }
 
 interface ShownLine {
@@ -59,6 +61,9 @@ export function MockRoom(props: Props) {
   const now = useCallback(() => Date.now() - clockStart.current, []);
 
   const [started, setStarted] = useState(false);
+  // The countdown runs from the first Start press, not from when the session was set up.
+  const [startT, setStartT] = useState<number | null>(props.startT);
+  const startTRef = useRef(props.startT);
   const [elapsed, setElapsed] = useState(props.elapsedAtRender);
   const [lines, setLines] = useState<ShownLine[]>(() =>
     props.initialLines.map((l, i) => ({ id: `init-${i}`, speaker: l.speaker, text: l.text })),
@@ -264,6 +269,10 @@ export function MockRoom(props: Props) {
 
   async function start() {
     setStarted(true);
+    if (startTRef.current === null) {
+      startTRef.current = now();
+      setStartT(startTRef.current);
+    }
     recorder.current?.push({ type: "marker", t: now(), payload: { what: "start", detail: props.voice } });
     recorder.current?.snapshot(codeRef.current[lang], lang);
     if (props.voice === "livekit") await startLiveKit();
@@ -279,7 +288,7 @@ export function MockRoom(props: Props) {
     if (!started || ending) return;
     const t = setInterval(() => {
       const n = now();
-      if (!wrapSent.current && totalMs - n <= WRAP_MS) {
+      if (!wrapSent.current && totalMs - (n - (startTRef.current ?? n)) <= WRAP_MS) {
         wrapSent.current = true;
         eventTurn("wrap");
         return;
@@ -384,7 +393,7 @@ export function MockRoom(props: Props) {
     }
   }
 
-  const remaining = totalMs - elapsed;
+  const remaining = totalMs - (startT === null ? 0 : Math.max(0, elapsed - startT));
   const STATE_LABEL: Record<IvState, string> = {
     idle: "Not started",
     connecting: "Connecting…",

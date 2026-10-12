@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DifficultyBadge, Tag } from "@/components/badges";
-import type { FeedbackReport } from "@/lib/feedback/analyze";
+import { fromStart, type FeedbackReport } from "@/lib/feedback/analyze";
 import type { TrackChange } from "@/lib/feedback/track-update";
 import { codeAt, fmtClock, sessionStats, transcript } from "@/lib/interview/timeline";
 import type { InterviewerKind, MockConfig, SessionEvent, VoiceMode } from "@/lib/interview/types";
@@ -31,7 +31,9 @@ interface Props {
 /** After the interview: the feedback report, headline numbers and a scrubbable replay of code and transcript. */
 export function Recap(props: Props) {
   const { events, durationMs } = props;
-  const stats = useMemo(() => sessionStats(events, durationMs), [events, durationMs]);
+  // Headline numbers count from the Start press, like the report; the replay keeps the recording's clock.
+  const fromStartPress = useMemo(() => fromStart(events, durationMs), [events, durationMs]);
+  const stats = useMemo(() => sessionStats(fromStartPress.events, fromStartPress.durationMs), [fromStartPress]);
   const lines = useMemo(() => transcript(events), [events]);
   const runs = events.filter((e): e is Extract<SessionEvent, { type: "run" }> => e.type === "run");
   const [t, setT] = useState(durationMs);
@@ -56,7 +58,7 @@ export function Recap(props: Props) {
       {/* The date is formatted in the viewer's locale and time zone, which the server can't know. */}
       <p className="mt-1 text-sm text-muted" suppressHydrationWarning>
         Mock interview on {new Date(props.startedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
-        {fmtClock(durationMs)} of {props.config.minutes} minutes · {props.config.persona} interviewer ·{" "}
+        {fmtClock(fromStartPress.durationMs)} of {props.config.minutes} minutes · {props.config.persona} interviewer ·{" "}
         {props.interviewer === "claude" ? "Claude" : "scripted"}, {props.voice === "livekit" ? "LiveKit" : "browser"} voice
       </p>
       {props.report ? (

@@ -3,7 +3,7 @@ import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { getReport } from "@/lib/feedback";
 import { claudeEnabled } from "@/lib/interview/claude";
-import { codeAt, transcript } from "@/lib/interview/timeline";
+import { codeAt, interviewStartT, transcript } from "@/lib/interview/timeline";
 import { getEvents, getMockSession, sessionClock } from "@/lib/mock";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
@@ -66,6 +66,7 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
       voice={session.voice}
       interviewer={session.interviewer}
       elapsedAtRender={sessionClock(session)}
+      startT={interviewStartT(events)}
     />
   );
 }
