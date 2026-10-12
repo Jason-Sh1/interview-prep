@@ -50,6 +50,18 @@ function fromRow(r: Row): DebugRound | null {
 
 export const debugClock = (r: DebugRound) => Math.max(0, Date.now() - r.startedAt.getTime());
 
+/** Slack past the time box for a last autosave in flight and clock drift. */
+export const DEBUG_GRACE_MS = 60_000;
+
+/** Past the time box: the code is frozen. The write-up can still be submitted. */
+export const debugTimeUp = (r: DebugRound) => debugClock(r) > r.minutes * 60_000 + DEBUG_GRACE_MS;
+
+export class DebugTimeUpError extends Error {
+  constructor() {
+    super("Time's up for this round. Finish and write up what you found.");
+  }
+}
+
 export async function createDebugRound(userId: string, taskId: string, minutes: number, withAssistant: boolean): Promise<string> {
   await ensureMigrated();
   if (!DEBUG_TASK_BY_ID.has(taskId)) throw new Error("Unknown task");
@@ -75,6 +87,7 @@ const open = (id: string) => and(eq(schema.debugRounds.id, id), isNull(schema.de
 
 /** Saves the latest files and appends a test run, while the round is open. */
 export async function saveDebugProgress(round: DebugRound, input: { files?: Record<string, string>; run?: { passed: number; total: number } }): Promise<void> {
+  if (debugTimeUp(round)) throw new DebugTimeUpError();
   if (!input.files && !input.run) return;
   await db
     .update(schema.debugRounds)
@@ -88,6 +101,7 @@ export async function saveDebugProgress(round: DebugRound, input: { files?: Reco
 
 /** One assistant turn; the prompt and reply are kept for the report. */
 export async function debugChat(round: DebugRound, text: string, files: Record<string, string>): Promise<string> {
+  if (debugTimeUp(round)) throw new DebugTimeUpError();
   if (round.assistant === "none") throw new Error("This round has no assistant");
   const t = debugClock(round);
   const reply =
@@ -107,9 +121,11 @@ export async function finishDebugRound(
   round: DebugRound,
   input: { files: Record<string, string>; answers: Record<string, string>; notes: string; tests: { passed: number; total: number; failing: string[]; passing?: string[] } },
 ): Promise<void> {
+  // After the time box, the code graded is the last version saved in time, not whatever arrives now.
+  const files = debugTimeUp(round) ? round.files : input.files;
   await db
     .update(schema.debugRounds)
-    .set({ endedAt: new Date(), files: input.files, answers: input.answers, notes: input.notes, testResults: input.tests })
+    .set({ endedAt: new Date(), files, answers: input.answers, notes: input.notes, testResults: input.tests })
     .where(open(round.id));
 }
 

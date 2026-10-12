@@ -83,6 +83,8 @@ export function DebugRoom(props: Props) {
     return () => clearInterval(id);
   }, [props.elapsedAtRender]);
   const remaining = props.minutes * 60_000 - elapsed;
+  // The server stops taking code a minute after the time box; freeze it here at zero.
+  const timeUp = remaining <= 0;
 
   const post = useCallback(
     (body: { files?: Record<string, string>; run?: { passed: number; total: number } }) => {
@@ -91,7 +93,11 @@ export function DebugRoom(props: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
         keepalive: true,
-      }).catch(() => setNotice("Couldn't save your latest changes; check your connection."));
+      })
+        .then(async (res) => {
+          if (!res.ok) setNotice(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't save your latest changes.");
+        })
+        .catch(() => setNotice("Couldn't save your latest changes; check your connection."));
     },
     [roundId],
   );
@@ -109,7 +115,13 @@ export function DebugRoom(props: Props) {
     return () => window.removeEventListener("pagehide", save);
   }, [save]);
 
+  // At time-up, save the last edits right away so the frozen code is what gets graded.
+  useEffect(() => {
+    if (timeUp) save();
+  }, [timeUp, save]);
+
   function onEdit(path: string, value: string) {
+    if (timeUp) return;
     setFiles((f) => ({ ...f, [path]: value }));
     dirty.current = true;
     if (!saveTimer.current) saveTimer.current = setTimeout(save, SAVE_DEBOUNCE_MS);
@@ -128,7 +140,7 @@ export function DebugRoom(props: Props) {
 
   async function ask() {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || timeUp) return;
     setDraft("");
     setSending(true);
     setChat((c) => [...c, { role: "user", text }]);
@@ -210,13 +222,13 @@ export function DebugRoom(props: Props) {
               tabSize: 2,
               scrollBeyondLastLine: false,
               automaticLayout: true,
-              readOnly: stage === "submitting",
+              readOnly: stage === "submitting" || timeUp,
             }}
           />
         </div>
         <div className="max-h-[35vh] overflow-y-auto border-t border-line p-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn-secondary" onClick={runTests} disabled={running || stage === "submitting"}>
+            <button className="btn-secondary" onClick={runTests} disabled={running || stage === "submitting" || timeUp}>
               {running ? "Running…" : "Run tests"}
             </button>
             {results && !results.error && (
@@ -255,7 +267,7 @@ export function DebugRoom(props: Props) {
               </button>
             )}
           </div>
-          {remaining <= 0 && stage === "working" && <p className="mt-1 text-sm text-bad">Time&apos;s up. Finish and write up what you found.</p>}
+          {remaining <= 0 && stage === "working" && <p className="mt-1 text-sm text-bad">Time&apos;s up. Your code is saved as it stands; finish and write up what you found.</p>}
           {showBrief && (
             <div className="mt-3 max-h-[30vh] overflow-y-auto text-sm">
               <Markdown text={task.brief} />
@@ -313,7 +325,7 @@ export function DebugRoom(props: Props) {
                     placeholder="Ask about the code (Enter to send, Shift+Enter for a new line)"
                     aria-label="Message to the assistant"
                   />
-                  <button className="btn-primary self-end" disabled={sending || !draft.trim()}>
+                  <button className="btn-primary self-end" disabled={sending || !draft.trim() || timeUp}>
                     Send
                   </button>
                 </form>
