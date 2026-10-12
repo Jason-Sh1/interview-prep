@@ -57,6 +57,13 @@
       "when": 1791783851872,
       "tag": "0007_drills",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791784095284,
+      "tag": "0008_review_variants",
+      "breakpoints": true
     }
   ]
 }

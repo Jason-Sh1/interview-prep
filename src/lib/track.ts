@@ -16,6 +16,7 @@ import { problemFrequency } from "./research/questions";
 import type { PatternId, Problem } from "./problems/types";
 import type { Language } from "./runner/drivers";
 import { judge0Enabled, runOnJudge0 } from "./runner/judge0";
+import { variantFor } from "./variants";
 
 export interface Goals {
   targetCompanies: string[];
@@ -167,6 +168,8 @@ export interface AttemptInput {
   confidence: Confidence | null;
   complexityChoice: string | null;
   code: string | null;
+  /** A review done on an AI-written variant of the problem. */
+  variantId?: number | null;
 }
 
 export interface AttemptResult {
@@ -183,7 +186,10 @@ const normalizeO = (s: string) => s.replace(/\s+/g, "").replace(/·|\*/g, "").to
 
 export async function recordAttempt(userId: string, input: AttemptInput, now = new Date()): Promise<AttemptResult> {
   await ensureMigrated();
-  const problem = PROBLEM_BY_SLUG.get(input.slug);
+  // A variant keeps the base problem's slug, pattern and rating; its tests and complexity are its own.
+  const variant = input.variantId ? await variantFor(input.slug, input.variantId) : null;
+  if (input.variantId && !variant) throw new Error("Unknown variant");
+  const problem = variant?.problem ?? PROBLEM_BY_SLUG.get(input.slug);
   if (!problem) throw new Error("Unknown problem");
 
   // With Judge0 the server re-checks an accepted claim against every test.
@@ -296,6 +302,7 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
     ratingBefore: before.rating,
     ratingAfter: after.rating,
     code: input.code?.slice(0, 50_000) ?? null,
+    variantId: variant?.variant.id ?? null,
   });
 
   return {

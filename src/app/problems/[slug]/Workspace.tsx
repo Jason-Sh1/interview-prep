@@ -32,6 +32,8 @@ interface Props {
   solvedBefore: boolean;
   /** An open drill from mock feedback that points at this problem. */
   drill?: { title: string; drill: string } | null;
+  /** Set when this review is an AI-written variant of the problem. */
+  variant?: { id: number; twist: string; originalTitle: string } | null;
 }
 
 type Stage = "solving" | "explaining" | "checkin" | "done";
@@ -96,7 +98,9 @@ export function Workspace(props: Props) {
 
   // Restore saved drafts and the last language for this problem. Reviews and
   // mixed practice keep their own drafts, so they never open on old code.
-  const draftKey = (l: Language, m: WorkspaceMode = mode) => (m === "learn" ? `draft:${problem.slug}:${l}` : `draft:${m}:${problem.slug}:${l}`);
+  // A variant has its own signature, so it keeps its own drafts too.
+  const draftId = props.variant ? `${problem.slug}~v${props.variant.id}` : problem.slug;
+  const draftKey = (l: Language, m: WorkspaceMode = mode) => (m === "learn" ? `draft:${draftId}:${l}` : `draft:${m}:${draftId}:${l}`);
   useEffect(() => {
     const restored = { ...props.starters };
     for (const l of LANGUAGES) {
@@ -109,7 +113,7 @@ export function Workspace(props: Props) {
     const last = storageGet(`lang:${problem.slug}`) as Language | null;
     if (last && restored[last] !== undefined) setLang(last);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [problem.slug]);
+  }, [draftId]);
 
   useEffect(() => {
     if (lang === "python" && runner === "browser") preloadPython();
@@ -144,7 +148,7 @@ export function Workspace(props: Props) {
           const r = await fetch("/api/run", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ slug: problem.slug, language: lang, code, scope }),
+            body: JSON.stringify({ slug: problem.slug, language: lang, code, scope, ...(props.variant ? { variantId: props.variant.id } : {}) }),
           });
           res = r.ok
             ? await r.json()
@@ -167,7 +171,7 @@ export function Workspace(props: Props) {
         setStage("checkin");
       }
     },
-    [runner, problem.slug, lang, code, sig, samples, props.allTests],
+    [runner, problem.slug, lang, code, sig, samples, props.allTests, props.variant],
   );
 
   function save(opts: { solved: boolean; gaveUp: boolean; confidence: Confidence | null; complexity: string | null; explained?: boolean }) {
@@ -191,6 +195,7 @@ export function Workspace(props: Props) {
           confidence: opts.confidence,
           complexityChoice: opts.complexity,
           code: opts.explained ? null : code,
+          variantId: props.variant?.id ?? null,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         setSaved(res);
@@ -240,6 +245,16 @@ export function Workspace(props: Props) {
           )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{problem.title}</h1>
+        {props.variant && (
+          <div className="card mt-3 border-accent bg-accent-soft p-3 text-sm">
+            <span className="font-medium">A twist on {props.variant.originalTitle}.</span> {props.variant.twist}{" "}
+            {stage === "solving" && (
+              <Link href={`/problems/${problem.slug}?mode=review&original=1`} className="text-accent underline">
+                Review the original instead
+              </Link>
+            )}
+          </div>
+        )}
         {props.drill && stage === "solving" && (
           <div className="card mt-3 border-warn bg-warn-soft p-3 text-sm">
             <span className="font-medium">Drill from your mock: {props.drill.title}.</span> {props.drill.drill}

@@ -1,5 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
@@ -7,6 +8,7 @@ import { isValidTimeZone } from "@/lib/engine/day";
 import type { PlanItem } from "@/lib/engine/planner";
 import { matchImported } from "@/lib/problems/import";
 import { getGoals, getTrackState, recordAttempt, saveGoals, type AttemptResult } from "@/lib/track";
+import { ensureVariant } from "@/lib/variants";
 
 const goalsSchema = z.object({
   targetCompanies: z.array(z.string()).transform((xs) => xs.filter((x) => COMPANY_BY_ID[x])),
@@ -86,6 +88,7 @@ const attemptSchema = z.object({
   confidence: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).nullable(),
   complexityChoice: z.string().nullable(),
   code: z.string().nullable(),
+  variantId: z.number().int().positive().nullable().optional(),
   /** The browser's zone; it keeps goals.timeZone current for users who set goals before it was recorded. */
   timeZone: z.string().max(64).optional(),
 });
@@ -96,6 +99,8 @@ export async function recordAttemptAction(
   const user = await requireUser();
   const { timeZone, ...attempt } = attemptSchema.parse(input);
   const result = await recordAttempt(user.id, attempt);
+  // Get a fresh variant ready for this problem's next review (spec 4.2).
+  if (result.solved) after(() => ensureVariant(user.id, attempt.slug).catch((e) => console.error("Variant generation failed", e)));
   let goals = await getGoals(user.id);
   let next: PlanItem | null = null;
   if (goals && timeZone && timeZone !== goals.timeZone && isValidTimeZone(timeZone)) {

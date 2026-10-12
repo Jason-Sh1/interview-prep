@@ -9,6 +9,7 @@ import { listAssistedSessions } from "@/lib/assisted";
 import { listMockSessions } from "@/lib/mock";
 import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
 import { getTrackState } from "@/lib/track";
+import { variantsWaiting, type Variant } from "@/lib/variants";
 
 const KIND_LABEL: Record<ItemKind, { label: string; tone: "accent" | "good" | "warn" | "neutral" }> = {
   new: { label: "New", tone: "accent" },
@@ -23,7 +24,7 @@ const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", revi
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
   const { welcome } = await searchParams;
-  const [{ plan, attempts }, whatsNew, mocks, rounds] = await Promise.all([
+  const [{ plan, attempts, cards }, whatsNew, mocks, rounds] = await Promise.all([
     getTrackState(user.id, goals),
     getWhatsNew(goals.targetCompanies).catch(() => [] as WhatsNewItem[]),
     listMockSessions(user.id),
@@ -38,6 +39,10 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const suggestMock = plan.phase === "final" && (!lastMock || now - lastMock.getTime() > 3 * 86_400_000);
   const phase = PHASE_INFO[plan.phase];
   const totalMinutes = plan.items.reduce((m, i) => m + i.minutes, 0);
+  const twists = await variantsWaiting(
+    user.id,
+    plan.items.filter((i) => i.kind === "review" && cards.some((c) => c.problemSlug === i.slug && c.reps > 0)).map((i) => i.slug),
+  ).catch(() => new Map<string, Variant>());
   const todayAttempts = attempts.filter((a) => plan.doneToday.includes(a.problemSlug));
 
   return (
@@ -110,7 +115,9 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
                     <DifficultyBadge difficulty={p.difficulty} />
                     {!item.hidePattern && <Tag>{PATTERN_BY_ID[p.pattern].name}</Tag>}
                   </div>
-                  <p className="mt-1 text-sm text-muted">{item.reason}</p>
+                  <p className="mt-1 text-sm text-muted">
+                    {item.kind === "review" && twists.has(item.slug) ? `Review with a twist: ${twists.get(item.slug)!.data.twist}` : item.reason}
+                  </p>
                 </div>
                 <span className="shrink-0 text-xs text-muted">~{item.minutes} min</span>
               </Link>
