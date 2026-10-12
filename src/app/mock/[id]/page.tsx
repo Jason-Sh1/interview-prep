@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
+import { getReport } from "@/lib/feedback";
+import { claudeEnabled } from "@/lib/interview/claude";
 import { codeAt, transcript } from "@/lib/interview/timeline";
 import { getEvents, getMockSession, sessionClock } from "@/lib/mock";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
@@ -22,8 +24,12 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
   const companyName = session.config.company ? (COMPANY_BY_ID[session.config.company]?.name ?? null) : null;
 
   if (session.endedAt) {
+    const report = await getReport(id);
     return (
       <Recap
+        sessionId={id}
+        report={report ? { report: report.report, trackChanges: report.trackChanges } : null}
+        usesClaude={claudeEnabled()}
         title={problem.title}
         patternName={PATTERN_BY_ID[problem.pattern].name}
         difficulty={problem.difficulty}

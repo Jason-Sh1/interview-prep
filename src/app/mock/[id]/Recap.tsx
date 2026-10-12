@@ -2,11 +2,19 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DifficultyBadge, Tag } from "@/components/badges";
+import type { FeedbackReport } from "@/lib/feedback/analyze";
+import type { TrackChange } from "@/lib/feedback/track-update";
 import { codeAt, fmtClock, sessionStats, transcript } from "@/lib/interview/timeline";
 import type { InterviewerKind, MockConfig, SessionEvent, VoiceMode } from "@/lib/interview/types";
 import type { Difficulty } from "@/lib/problems/types";
+import { ReportPending, ReportView } from "./Report";
 
 interface Props {
+  sessionId: string;
+  /** Null until the report has been built. */
+  report: { report: FeedbackReport; trackChanges: TrackChange[] } | null;
+  /** Whether a new report will be graded by Claude. */
+  usesClaude: boolean;
   title: string;
   patternName: string;
   difficulty: Difficulty;
@@ -20,7 +28,7 @@ interface Props {
   events: SessionEvent[];
 }
 
-/** After the interview: headline numbers and a scrubbable replay of code and transcript. */
+/** After the interview: the feedback report, headline numbers and a scrubbable replay of code and transcript. */
 export function Recap(props: Props) {
   const { events, durationMs } = props;
   const stats = useMemo(() => sessionStats(events, durationMs), [events, durationMs]);
@@ -51,12 +59,14 @@ export function Recap(props: Props) {
         {fmtClock(durationMs)} of {props.config.minutes} minutes · {props.config.persona} interviewer ·{" "}
         {props.interviewer === "claude" ? "Claude" : "scripted"}, {props.voice === "livekit" ? "LiveKit" : "browser"} voice
       </p>
-      <p className="card mt-4 bg-surface-2 p-3 text-sm">
-        Your full feedback report (rubric scores, communication analysis and focus areas fed back into your plan) is coming next. For now,
-        here&apos;s the recording it will be built from.
-      </p>
+      {props.report ? (
+        <ReportView report={props.report.report} trackChanges={props.report.trackChanges} onJump={setT} />
+      ) : (
+        <ReportPending sessionId={props.sessionId} usesClaude={props.usesClaude} />
+      )}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <h2 className="mt-8 text-lg font-semibold">By the numbers</h2>
+      <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stat("First spoke at", at(stats.firstSpokeMs))}
         {stat("First test run", at(stats.firstRunMs))}
         {stat("All tests passed at", at(stats.acceptedMs))}
@@ -67,7 +77,9 @@ export function Recap(props: Props) {
         {stat("Optimal", props.optimal.time)}
       </div>
 
-      <h2 className="mt-8 text-lg font-semibold">Replay</h2>
+      <h2 id="replay" className="mt-8 scroll-mt-20 text-lg font-semibold">
+        Replay
+      </h2>
       <div className="mt-2 flex items-center gap-3">
         <input
           type="range"
