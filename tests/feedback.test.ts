@@ -8,9 +8,10 @@ import {
   outcomeOf,
   type FeedbackReport,
 } from "@/lib/feedback/analyze";
-import { planMockUpdate } from "@/lib/feedback/track-update";
+import { planDrills, planMockUpdate } from "@/lib/feedback/track-update";
+import { buildPlan } from "@/lib/engine/planner";
 import type { SessionEvent } from "@/lib/interview/types";
-import { PROBLEM_BY_SLUG } from "@/lib/problems";
+import { PROBLEM_BY_SLUG, PROBLEMS } from "@/lib/problems";
 import { starterCode } from "@/lib/runner/drivers";
 
 const twoSum = PROBLEM_BY_SLUG.get("pair-with-target-sum")!;
@@ -152,5 +153,33 @@ describe("mock feedback into the track", () => {
     const r = analyzeSession({ ...base, events: strong, durationMs: 5 * MIN });
     const shaky: FeedbackReport = { ...r, rubric: { ...r.rubric, approach: { score: 2, evidence: "" } } };
     expect(planMockUpdate(shaky, skill, twoSum.rating).resolve).toBe(true);
+  });
+
+  it("turns focus areas into drills on other problems in the pattern", () => {
+    const r = analyzeSession({ ...base, events: weak, durationMs: 14 * MIN });
+    expect(r.focus.length).toBeGreaterThan(0);
+    const drills = planDrills(r, twoSum, 1200, new Set(), PROBLEMS);
+    expect(drills.length).toBe(Math.min(r.focus.length, PROBLEMS.filter((p) => p.pattern === twoSum.pattern).length - 1));
+    expect(new Set(drills.map((d) => d.problemSlug)).size).toBe(drills.length);
+    for (const d of drills) {
+      expect(d.problemSlug).not.toBe(twoSum.slug);
+      expect(PROBLEM_BY_SLUG.get(d.problemSlug)!.pattern).toBe(twoSum.pattern);
+    }
+    expect(drills[0]).toMatchObject({ area: r.focus[0].area, drill: r.focus[0].drill });
+  });
+
+  it("puts drills in the plan with the drill as the reason", () => {
+    const target = PROBLEMS.find((p) => p.pattern === "trees")!;
+    const plan = buildPlan({
+      now: new Date("2026-10-12T12:00:00Z"),
+      goals: { targetCompanies: [], interviewDate: null, hoursPerWeek: 7 },
+      skills: {},
+      attempts: [],
+      cards: [],
+      problems: PROBLEMS,
+      drills: [{ problemSlug: target.slug, title: "Keep talking under pressure", drill: "Narrate every failed run." }],
+    });
+    expect(plan.items[0]).toMatchObject({ slug: target.slug, kind: "drill" });
+    expect(plan.items[0].reason).toContain("Narrate every failed run.");
   });
 });

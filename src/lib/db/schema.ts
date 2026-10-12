@@ -230,6 +230,30 @@ export const feedbackReports = pgTable("feedback_reports", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/**
+ * Focus-area drills from mock feedback (spec 4.4), pushed into the plan: each
+ * pairs a focus area's drill with a problem to practice it on. Done when the
+ * user next attempts that problem.
+ */
+export const drills = pgTable(
+  "drills",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => mockSessions.id, { onDelete: "cascade" }),
+    /** The rubric area it works on. */
+    area: text("area").notNull(),
+    title: text("title").notNull(),
+    drill: text("drill").notNull(),
+    problemSlug: text("problem_slug").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    doneAt: timestamp("done_at"),
+  },
+  (t) => [index("drills_user_open_idx").on(t.userId, t.doneAt, t.createdAt)],
+);
+
 // ---------------------------------------------------------------------------
 // AI-assisted coding rounds (spec 4.5)
 

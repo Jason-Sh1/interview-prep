@@ -2,14 +2,14 @@ import "server-only";
 // Data access for the learning track: reads the user's state, builds the
 // plan, and records attempts (rating update, stuck detection, FSRS review).
 
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./db";
 import { gradeFor, cardFromJson, cardToJson, newCard, reviewCard, type Confidence } from "./engine/fsrs";
 import type { SkillMap } from "./engine/mastery";
 import { buildPlan, type AttemptSummary, type DailyPlan } from "./engine/planner";
 import { attemptScore, INITIAL_RATING, INITIAL_UNCERTAINTY, isFastTrack, updateSkill } from "./engine/rating";
 import type { FeedbackReport } from "./feedback/analyze";
-import { planMockUpdate, type TrackChange } from "./feedback/track-update";
+import { DRILL_DAYS, planDrills, planMockUpdate, type TrackChange } from "./feedback/track-update";
 import { PROBLEM_BY_SLUG, PROBLEMS } from "./problems";
 import { getLiveCompanies, getLiveQuestions } from "./research";
 import { problemFrequency } from "./research/questions";
@@ -86,6 +86,32 @@ export async function getCards(userId: string) {
     .where(eq(schema.reviewCards.userId, userId));
 }
 
+export interface OpenDrill {
+  id: number;
+  problemSlug: string;
+  title: string;
+  drill: string;
+  createdAt: Date;
+}
+
+/** Focus-area drills from recent mocks that haven't been practiced yet. */
+export async function getOpenDrills(userId: string, now = new Date()): Promise<OpenDrill[]> {
+  await ensureMigrated();
+  return db
+    .select({
+      id: schema.drills.id,
+      problemSlug: schema.drills.problemSlug,
+      title: schema.drills.title,
+      drill: schema.drills.drill,
+      createdAt: schema.drills.createdAt,
+    })
+    .from(schema.drills)
+    .where(
+      and(eq(schema.drills.userId, userId), isNull(schema.drills.doneAt), gte(schema.drills.createdAt, new Date(now.getTime() - DRILL_DAYS * 86_400_000))),
+    )
+    .orderBy(desc(schema.drills.createdAt));
+}
+
 export interface TrackState {
   goals: Goals;
   skills: SkillMap;
@@ -95,15 +121,16 @@ export interface TrackState {
 }
 
 export async function getTrackState(userId: string, goals: Goals, now = new Date()): Promise<TrackState> {
-  const [skills, attempts, cards, companies, questions] = await Promise.all([
+  const [skills, attempts, cards, companies, questions, drills] = await Promise.all([
     getSkills(userId),
     getAttemptSummaries(userId),
     getCards(userId),
     getLiveCompanies(),
     getLiveQuestions(),
+    getOpenDrills(userId, now),
   ]);
   const questionFrequency = problemFrequency(goals.targetCompanies, questions);
-  const plan = buildPlan({ now, goals, skills, attempts, cards, problems: PROBLEMS, companies, questionFrequency });
+  const plan = buildPlan({ now, goals, skills, attempts, cards, problems: PROBLEMS, companies, questionFrequency, drills });
   return { goals, skills, attempts, cards, plan };
 }
 
@@ -241,6 +268,12 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
       .onConflictDoUpdate({ target: [schema.reviewCards.userId, schema.reviewCards.problemSlug], set: values });
   }
 
+  // Practicing a problem completes any drill that pointed at it.
+  await db
+    .update(schema.drills)
+    .set({ doneAt: now })
+    .where(and(eq(schema.drills.userId, userId), eq(schema.drills.problemSlug, problem.slug), isNull(schema.drills.doneAt)));
+
   await db.insert(schema.attempts).values({
     userId,
     problemSlug: problem.slug,
@@ -281,7 +314,13 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
  * pattern rating, and a failed or shaky solve comes back as a re-solve due
  * today (spec 4.2 "Mock feedback loop"). Returns what changed, for the report.
  */
-export async function applyMockFeedback(userId: string, problem: Problem, report: FeedbackReport, now = new Date()): Promise<TrackChange[]> {
+export async function applyMockFeedback(
+  userId: string,
+  problem: Problem,
+  report: FeedbackReport,
+  now = new Date(),
+  sessionId: string | null = null,
+): Promise<TrackChange[]> {
   await ensureMigrated();
   const changes: TrackChange[] = [];
   const [row] = await db
@@ -317,6 +356,19 @@ export async function applyMockFeedback(userId: string, problem: Problem, report
       await db.insert(schema.reviewCards).values({ userId, problemSlug: problem.slug, due: now, card: cardToJson(card), reps: 0, lapses: 0 });
     }
     changes.push({ kind: "review", slug: problem.slug, title: problem.title });
+  }
+
+  // Focus areas become drills on related problems (spec 4.4 "pushed into the roadmap").
+  const solvedRows = await db
+    .selectDistinct({ slug: schema.attempts.problemSlug })
+    .from(schema.attempts)
+    .where(and(eq(schema.attempts.userId, userId), eq(schema.attempts.solved, true)));
+  const drills = planDrills(report, problem, plan.skill?.rating ?? before.rating, new Set(solvedRows.map((r) => r.slug)), PROBLEMS);
+  if (drills.length) {
+    await db.insert(schema.drills).values(drills.map((d) => ({ userId, sessionId, ...d, createdAt: now })));
+    for (const d of drills) {
+      changes.push({ kind: "drill", slug: d.problemSlug, title: d.title, problemTitle: PROBLEM_BY_SLUG.get(d.problemSlug)?.title ?? d.problemSlug });
+    }
   }
   return changes;
 }

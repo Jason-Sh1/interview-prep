@@ -30,6 +30,8 @@ interface Props {
   complexityChoices: string[];
   previousAttempts: number;
   solvedBefore: boolean;
+  /** An open drill from mock feedback that points at this problem. */
+  drill?: { title: string; drill: string } | null;
 }
 
 type Stage = "solving" | "explaining" | "checkin" | "done";
@@ -238,6 +240,11 @@ export function Workspace(props: Props) {
           )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{problem.title}</h1>
+        {props.drill && stage === "solving" && (
+          <div className="card mt-3 border-warn bg-warn-soft p-3 text-sm">
+            <span className="font-medium">Drill from your mock: {props.drill.title}.</span> {props.drill.drill}
+          </div>
+        )}
         {mode === "review" && stage === "solving" && (
           <div className="card mt-3 bg-good-soft p-3 text-sm">
             Review: re-implement it against the clock, or{" "}

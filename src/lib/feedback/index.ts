@@ -69,7 +69,7 @@ async function build(session: MockSession): Promise<StoredReport> {
     .returning({ createdAt: schema.feedbackReports.createdAt });
   if (!inserted) return (await getReport(session.id)) as StoredReport;
 
-  const trackChanges = await applyMockFeedback(session.userId, problem, report);
+  const trackChanges = await applyMockFeedback(session.userId, problem, report, new Date(), session.id);
   await db
     .update(schema.feedbackReports)
     .set({ trackChanges: trackChanges as unknown as Record<string, unknown>[] })
