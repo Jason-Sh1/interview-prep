@@ -7,6 +7,10 @@ export default async function Home() {
   if (await getCurrentUser()) redirect("/today");
   const features = [
     {
+      title: "Starts at your level",
+      body: "A short diagnostic, three problems and a quick voice mock, sets your starting point per pattern and a baseline for how you communicate.",
+    },
+    {
       title: "A plan that re-plans after every attempt",
       body: "Each day's queue is scored from your weakest patterns, your target companies, problems at a ~70% solve chance, and reviews that are due.",
     },
@@ -16,7 +20,7 @@ export default async function Home() {
     },
     {
       title: "Spaced repetition with FSRS",
-      body: "Solved problems come back as short reviews right before you'd forget them. Hints shorten the next interval.",
+      body: "Solved problems come back as short reviews right before you'd forget them, often as a fresh twist on the original. Hints shorten the next interval.",
     },
     {
       title: "Mixed practice and stuck detection",
@@ -29,6 +33,10 @@ export default async function Home() {
     {
       title: "AI-assisted coding rounds",
       body: "Practice the new rounds where an AI assistant is allowed: a small repo, a chat assistant that sometimes slips in a bug, and grading on how you prompt, review and own the code.",
+    },
+    {
+      title: "Comprehension and debugging rounds",
+      body: "Read an unfamiliar repo, explain how it works, and find the bugs seeded in it, graded on what you fixed, how you verified it and how you explain it.",
     },
   ];
   return (
