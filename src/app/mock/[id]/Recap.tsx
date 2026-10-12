@@ -26,6 +26,8 @@ interface Props {
   startedAt: string;
   durationMs: number;
   events: SessionEvent[];
+  /** This was the onboarding diagnostic's mock. */
+  diagnostic?: boolean;
 }
 
 /** After the interview: the feedback report, headline numbers and a scrubbable replay of code and transcript. */
@@ -61,6 +63,14 @@ export function Recap(props: Props) {
         {fmtClock(fromStartPress.durationMs)} of {props.config.minutes} minutes · {props.config.persona} interviewer ·{" "}
         {props.interviewer === "claude" ? "Claude" : "scripted"}, {props.voice === "livekit" ? "LiveKit" : "browser"} voice
       </p>
+      {props.diagnostic && (
+        <div className="card mt-4 flex flex-wrap items-center gap-3 border-accent bg-accent-soft p-3 text-sm">
+          <span className="flex-1">This was your diagnostic mock. Its report sets your communication baseline.</span>
+          <Link href="/diagnostic" className="btn-primary">
+            Back to the diagnostic
+          </Link>
+        </div>
+      )}
       {props.report ? (
         <ReportView report={props.report.report} trackChanges={props.report.trackChanges} onJump={(t) => setT(t + (props.report?.report.startOffsetMs ?? 0))} />
       ) : (
@@ -132,9 +142,15 @@ export function Recap(props: Props) {
       </div>
 
       <div className="mt-8 flex gap-2">
-        <Link href="/mock" className="btn-primary">
-          New mock interview
-        </Link>
+        {props.diagnostic ? (
+          <Link href="/diagnostic" className="btn-primary">
+            Back to the diagnostic
+          </Link>
+        ) : (
+          <Link href="/mock" className="btn-primary">
+            New mock interview
+          </Link>
+        )}
         <Link href="/today" className="btn-secondary">
           Back to today
         </Link>

@@ -34,6 +34,8 @@ interface Props {
   drill?: { title: string; drill: string } | null;
   /** Set when this review is an AI-written variant of the problem. */
   variant?: { id: number; twist: string; originalTitle: string } | null;
+  /** Set when opened from the onboarding diagnostic: which problem of how many. */
+  diagnostic?: { step: number; total: number } | null;
 }
 
 type Stage = "solving" | "explaining" | "checkin" | "done";
@@ -255,6 +257,14 @@ export function Workspace(props: Props) {
             )}
           </div>
         )}
+        {props.diagnostic && stage === "solving" && (
+          <div className="card mt-3 border-accent bg-accent-soft p-3 text-sm">
+            <span className="font-medium">
+              Diagnostic, problem {props.diagnostic.step} of {props.diagnostic.total}.
+            </span>{" "}
+            Aim for about eight minutes, and give up when you&apos;re stuck: a miss tells the plan as much as a solve.
+          </div>
+        )}
         {props.drill && stage === "solving" && (
           <div className="card mt-3 border-warn bg-warn-soft p-3 text-sm">
             <span className="font-medium">Drill from your mock: {props.drill.title}.</span> {props.drill.drill}
@@ -375,6 +385,7 @@ export function Workspace(props: Props) {
             pattern={problem.pattern}
             patternName={props.patternName}
             nextHref={saved.next ? nextHref(saved.next) : null}
+            diagnostic={!!props.diagnostic}
             source={problem.source}
           />
         )}
@@ -529,6 +540,7 @@ function ResultPanel(props: {
   patternName: string;
   nextHref: string | null;
   source?: { name: string; url: string };
+  diagnostic?: boolean;
 }) {
   const r = props.saved.result;
   const delta = Math.round(r.ratingAfter - r.ratingBefore);
@@ -572,7 +584,11 @@ function ResultPanel(props: {
         </p>
       )}
       <div className="mt-4 flex gap-2">
-        {props.nextHref ? (
+        {props.diagnostic ? (
+          <Link href="/diagnostic" className="btn-primary">
+            Back to the diagnostic
+          </Link>
+        ) : props.nextHref ? (
           <Link href={props.nextHref} className="btn-primary">
             Next in today&apos;s plan
           </Link>

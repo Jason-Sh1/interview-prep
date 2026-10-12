@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
+import { isDiagnosticMock } from "@/lib/diagnostic";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { getReport } from "@/lib/feedback";
 import { claudeEnabled } from "@/lib/interview/claude";
@@ -24,7 +25,7 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
   const companyName = session.config.company ? (COMPANY_BY_ID[session.config.company]?.name ?? null) : null;
 
   if (session.endedAt) {
-    const report = await getReport(id);
+    const [report, diagnostic] = await Promise.all([getReport(id), isDiagnosticMock(user.id, id)]);
     return (
       <Recap
         sessionId={id}
@@ -41,6 +42,7 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
         startedAt={session.startedAt.toISOString()}
         durationMs={session.endedAt.getTime() - session.startedAt.getTime()}
         events={events}
+        diagnostic={diagnostic}
       />
     );
   }
