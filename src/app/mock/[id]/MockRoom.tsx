@@ -97,7 +97,8 @@ export function MockRoom(props: Props) {
   const lastCandidateAt = useRef(0);
   const lastInterviewerAt = useRef(0);
   const lastSilenceTurnAt = useRef(-Infinity);
-  const wrapSent = useRef(false);
+  // Already inside the last two minutes when the page loads (a reload): the wrap-up was given before.
+  const wrapSent = useRef(props.startT !== null && totalMs - (props.elapsedAtRender - props.startT) <= WRAP_MS);
   const lineSeq = useRef(0);
   const transcriptEnd = useRef<HTMLDivElement>(null);
 
@@ -275,7 +276,11 @@ export function MockRoom(props: Props) {
     }
     recorder.current?.push({ type: "marker", t: now(), payload: { what: "start", detail: props.voice } });
     recorder.current?.snapshot(codeRef.current[lang], lang);
-    if (props.voice === "livekit") await startLiveKit();
+    // The agent's first turn reads the clock from the stored start marker, so store it first.
+    if (props.voice === "livekit") {
+      await recorder.current?.flush();
+      await startLiveKit();
+    }
     else {
       startBrowserVoice();
       if (props.initialLines.length === 0) void browserTurn("start");

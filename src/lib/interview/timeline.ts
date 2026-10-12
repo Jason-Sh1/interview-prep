@@ -68,9 +68,9 @@ export interface TurnContext {
   runs: number;
   everAccepted: boolean;
   lines: Line[];
-  /** Milliseconds since the candidate last spoke (or since the start). */
+  /** Milliseconds since the candidate last spoke, counting from the Start press at most. */
   sinceCandidateSpokeMs: number;
-  /** Milliseconds since the code last changed (or since the start). */
+  /** Milliseconds since the code last changed, counting from the Start press at most. */
   sinceCodeChangedMs: number;
 }
 
@@ -82,7 +82,9 @@ export function turnContext(events: SessionEvent[], opts: { now: number; totalMs
   const lastCandidate = [...lines].reverse().find((l) => l.speaker === "candidate");
   const lastEdit = [...events].reverse().find((e) => e.type === "edit");
   const norm = (s: string) => s.replace(/\s+/g, "");
-  const elapsedMs = Math.max(0, opts.now - (interviewStartT(events) ?? 0));
+  // No start marker yet (it may still be in the browser's send queue) means the clock hasn't started.
+  const startT = interviewStartT(events) ?? opts.now;
+  const elapsedMs = Math.max(0, opts.now - startT);
   return {
     elapsedMs,
     remainingMs: Math.max(0, opts.totalMs - elapsedMs),
@@ -93,8 +95,8 @@ export function turnContext(events: SessionEvent[], opts: { now: number; totalMs
     runs: runs.length,
     everAccepted: runs.some((e) => e.type === "run" && e.payload.scope === "all" && e.payload.verdict === "accepted"),
     lines,
-    sinceCandidateSpokeMs: opts.now - (lastCandidate?.t ?? 0),
-    sinceCodeChangedMs: opts.now - (lastEdit?.t ?? 0),
+    sinceCandidateSpokeMs: opts.now - Math.max(lastCandidate?.t ?? 0, startT),
+    sinceCodeChangedMs: opts.now - Math.max(lastEdit?.t ?? 0, startT),
   };
 }
 

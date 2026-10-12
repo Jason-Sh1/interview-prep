@@ -55,6 +55,7 @@ describe("timeline", () => {
   it("summarizes the moment for the interviewer", () => {
     const starter = starterCode(twoSum.signature, "python");
     const events: SessionEvent[] = [
+      { type: "marker", t: 0, payload: { what: "start", detail: "browser" } },
       { type: "snapshot", t: 0, payload: { code: starter, language: "python" } },
       { type: "transcript", t: 30_000, payload: { speaker: "candidate", text: "Can the array be empty?", source: "typed" } },
       { type: "edit", t: 60_000, payload: { ops: [{ offset: starter.length, length: 0, text: "\n# hi" }] } },
@@ -67,6 +68,21 @@ describe("timeline", () => {
     expect(ctx.sinceCodeChangedMs).toBe(40_000);
     expect(ctx.remainingMs).toBe(45 * 60_000 - 100_000);
     expect(turnContext([], { now: 0, totalMs: 1, starter }).hasCode).toBe(false);
+  });
+
+  it("doesn't count lobby time before the start marker is stored", () => {
+    const starter = starterCode(twoSum.signature, "python");
+    const lobby: SessionEvent[] = [{ type: "snapshot", t: 0, payload: { code: starter, language: "python" } }];
+    const early = turnContext(lobby, { now: 30 * 60_000, totalMs: 45 * 60_000, starter });
+    expect(early.remainingMs).toBe(45 * 60_000);
+    expect(early.sinceCandidateSpokeMs).toBe(0);
+    const started = turnContext([...lobby, { type: "marker", t: 30 * 60_000, payload: { what: "start", detail: "livekit" } }], {
+      now: 31 * 60_000,
+      totalMs: 45 * 60_000,
+      starter,
+    });
+    expect(started.remainingMs).toBe(44 * 60_000);
+    expect(started.sinceCodeChangedMs).toBe(60_000);
   });
 
   it("computes recap stats", () => {
@@ -109,7 +125,7 @@ describe("scripted interviewer", () => {
 
   function run(steps: { kind: TurnKind; text?: string; events?: SessionEvent[]; now?: number }[], cfg = config) {
     let state: ScriptState = INITIAL_SCRIPT_STATE;
-    const events: SessionEvent[] = [{ type: "snapshot", t: 0, payload: { code: starter, language: "python" } }];
+    const events: SessionEvent[] = [{ type: "marker", t: 0, payload: { what: "start", detail: "browser" } }, { type: "snapshot", t: 0, payload: { code: starter, language: "python" } }];
     const replies: string[] = [];
     let now = 0;
     for (const step of steps) {
@@ -218,7 +234,7 @@ describe("Claude interviewer prompt", () => {
     expect(sys).toContain(SILENT);
 
     const starter = starterCode(twoSum.signature, "python");
-    const ctx = turnContext([{ type: "snapshot", t: 0, payload: { code: "x = 1", language: "python" } }], { now: 65_000, totalMs: 45 * 60_000, starter });
+    const ctx = turnContext([{ type: "marker", t: 0, payload: { what: "start", detail: "browser" } }, { type: "snapshot", t: 0, payload: { code: "x = 1", language: "python" } }], { now: 65_000, totalMs: 45 * 60_000, starter });
     const msg = turnMessage("utterance", "I think it's linear", ctx);
     expect(msg).toContain('Candidate said: "I think it\'s linear"');
     expect(msg).toContain("x = 1");
