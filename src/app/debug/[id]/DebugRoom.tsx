@@ -160,7 +160,12 @@ export function DebugRoom(props: Props) {
         files: final,
         answers,
         notes,
-        tests: { passed: res.passed, total: res.total, failing: res.results.filter((r) => !r.passed).map((r) => r.name).slice(0, 100) },
+        tests: {
+          passed: res.passed,
+          total: res.total,
+          failing: res.results.filter((r) => !r.passed).map((r) => r.name).slice(0, 100),
+          passing: res.results.filter((r) => r.passed).map((r) => r.name).slice(0, 300),
+        },
       });
       try {
         localStorage.removeItem(draftKey);

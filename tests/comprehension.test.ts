@@ -42,7 +42,12 @@ describe("debug round grading", () => {
   const task = DEBUG_TASKS[0];
   const run = async (files: Record<string, string>) => {
     const res = await runHarnessHere({ ...files, ...task.hiddenTests }, allTests(task));
-    return { passed: res.passed, total: res.total, failing: res.results.filter((r) => !r.passed).map((r) => r.name) };
+    return {
+      passed: res.passed,
+      total: res.total,
+      failing: res.results.filter((r) => !r.passed).map((r) => r.name),
+      passing: res.results.filter((r) => r.passed).map((r) => r.name),
+    };
   };
 
   it("credits fixed and explained bugs, good answers and testing", async () => {
@@ -91,6 +96,21 @@ describe("debug round grading", () => {
     expect(report.rubric.verification.score).toBe(1);
     expect(["no", "strong-no"]).toContain(report.hire.signal);
     expect(report.focus.length).toBeGreaterThan(0);
+  });
+
+  it("counts no bug fixed when the final code doesn't load or the run dies", async () => {
+    const { gradeDebugRound } = await import("@/lib/comprehension/grade");
+    const files = applyFixes(task);
+    for (const f of Object.keys(files)) if (f.startsWith("src/")) files[f] += "\n}{ syntax error";
+    const base = { task, finalFiles: files, answers: {}, notes: "", runs: [], prompts: 0, withAssistant: false, durationMs: 900_000 };
+    const broken = gradeDebugRound({ ...base, tests: await run(files) });
+    expect(broken.bugs.filter((b) => b.fixed)).toEqual([]);
+    // A worker crash or timeout reports nothing at all.
+    const died = gradeDebugRound({ ...base, tests: { passed: 0, total: 0, failing: [], passing: [] } });
+    expect(died.bugs.filter((b) => b.fixed)).toEqual([]);
+    // Older rounds stored only the failing names; an empty run still counts nothing.
+    const legacy = gradeDebugRound({ ...base, tests: { passed: 0, total: 0, failing: [] } });
+    expect(legacy.bugs.filter((b) => b.fixed)).toEqual([]);
   });
 
   it("the offline helper explains but won't hand over the bugs", async () => {

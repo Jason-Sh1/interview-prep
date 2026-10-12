@@ -27,6 +27,7 @@ const finishSchema = z.object({
     passed: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
     failing: z.array(z.string().max(300)).max(100),
+    passing: z.array(z.string().max(300)).max(300),
   }),
 });
 
