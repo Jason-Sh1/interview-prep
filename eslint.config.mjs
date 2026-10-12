@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "public/vendor/**",
+    // The voice agent worker is its own package with its own checks.
+    "agent/**",
   ]),
 ]);
 

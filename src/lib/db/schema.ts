@@ -156,3 +156,51 @@ export const reviewCards = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.problemSlug] }), index("review_cards_due_idx").on(t.userId, t.due)],
 );
+
+// ---------------------------------------------------------------------------
+// Live mock interviews (spec 4.3)
+
+/** One mock interview: the problem, its settings, and how it was run. */
+export const mockSessions = pgTable(
+  "mock_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    problemSlug: text("problem_slug").notNull(),
+    /** Persona, length, hints and company style chosen at setup. */
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    language: text("language").notNull(),
+    /** "livekit" (server voice pipeline) or "browser" (Web Speech API). */
+    voice: text("voice").notNull(),
+    /** "claude" or "scripted" (the no-key fallback). */
+    interviewer: text("interviewer").notNull(),
+    /** The scripted interviewer's progress through the interview. */
+    interviewerState: jsonb("interviewer_state").$type<Record<string, unknown>>().notNull().default({}),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+    finalCode: text("final_code"),
+  },
+  (t) => [index("mock_sessions_user_started_idx").on(t.userId, t.startedAt)],
+);
+
+/**
+ * The session's append-only timeline: code edits and snapshots, test runs,
+ * and transcript segments from both speakers. `t` is milliseconds since the
+ * session started; the feedback report (spec 4.4) replays from this.
+ */
+export const sessionEvents = pgTable(
+  "session_events",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => mockSessions.id, { onDelete: "cascade" }),
+    t: integer("t").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("session_events_session_t_idx").on(t.sessionId, t.t)],
+);

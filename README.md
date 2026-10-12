@@ -11,7 +11,9 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 ## Status
 
-Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews. Next up: live voice mock interviews (phase 2).
+Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
+
+Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Next up: the feedback report built from that timeline (phase 3).
 
 ## Running it
 
@@ -22,7 +24,7 @@ npm install          # also copies Monaco and Pyodide into public/vendor
 npm run dev          # http://localhost:3000
 ```
 
-No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data`, and code runs in your browser. See [.env.example](.env.example) for the optional settings (Postgres, GitHub sign-in, Judge0). Production needs `BETTER_AUTH_SECRET`.
+No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data`, code runs in your browser, and mock interviews use your browser's voice with a scripted interviewer. See [.env.example](.env.example) for the optional settings (Postgres, GitHub sign-in, Judge0, Claude, LiveKit). Production needs `BETTER_AUTH_SECRET`.
 
 ```bash
 npm test             # engine and test-runner unit tests, plus every reference solution
@@ -42,6 +44,8 @@ npm run typecheck
 | Editor | Monaco, served from `public/vendor` | `src/app/problems/[slug]/Workspace.tsx` |
 | Code runner | In the browser by default (JS in a Web Worker, Python via Pyodide); Judge0 on the server when `JUDGE0_URL` is set | `src/lib/runner` |
 | Learning engine | Pure functions, unit tested | `src/lib/engine` |
+| Mock interviews | Interviewer, timeline and prompts in `src/lib/interview`; data access in `src/lib/mock.ts` | Pages in `src/app/mock`, API in `src/app/api/mock` |
+| Voice agent | LiveKit Agents worker, its own package | `agent/` |
 
 ### The learning engine (spec 4.2)
 
@@ -55,3 +59,27 @@ npm run typecheck
 ### Adding problems
 
 Add an entry to the pattern's file in `src/lib/problems/bank`, with a JavaScript `reference` solution, then run `npm run validate:bank`. It runs the reference through the real test driver against every test.
+
+### Mock interviews (spec 4.3)
+
+Start one from **Mock interview** in the nav. You pick the problem (the plan's next one by default), length, persona, company style and whether hints are allowed. The interviewer opens, answers clarifying questions, asks for your approach and its complexity, mostly listens while you code, reacts to your test runs, nudges you after about 40 seconds of silence, gives tiered hints if allowed, and starts wrapping up two minutes before the end.
+
+Two pieces switch on with environment variables, and each has a fallback so `npm run dev` works with no keys:
+
+| Piece | With keys | Without keys |
+|---|---|---|
+| Interviewer | Claude (`claude-sonnet-5-5`, low effort, streamed) when `ANTHROPIC_API_KEY` is set. Each turn gets the live code, the last test run, the clock and the transcript so far. If a call fails, that turn falls back to the scripted reply. | A scripted interviewer (`interview/scripted.ts`) that follows the same interview arc with keyword and code checks (it spots nested loops, parses spoken complexities like "n log n", answers clarifying questions from the constraints and test labels). |
+| Voice | LiveKit when `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` and `INTERVIEWER_AGENT_SECRET` are set and the agent worker is running. Speech-to-text and text-to-speech run on LiveKit Inference (Deepgram Nova 3 and Cartesia Sonic 3 by default), so no separate STT or TTS keys. | The browser's Web Speech API: speech recognition (Chrome, Edge, Safari) and speech synthesis, speaking each sentence as it streams in. You can always type instead. Use headphones; "talk over the interviewer" turns on barge-in. |
+
+Running the LiveKit voice agent:
+
+```bash
+cd agent
+npm install
+cp .env.example .env.local   # LiveKit keys, APP_URL and the same INTERVIEWER_AGENT_SECRET as the app
+npm run dev
+```
+
+The agent only moves audio. For every turn it calls the app's `POST /api/mock/[id]/turn` (authenticated by `INTERVIEWER_AGENT_SECRET`), so Claude, the live code context and the recording all stay in one place. The page sends event turns (test runs, silence, wrap-up) and typed messages to the agent over LiveKit data messages.
+
+**Recording.** Every session writes an append-only timeline to `session_events`: each Monaco change as an edit (offset, length, text), a full snapshot every 15 seconds of editing and at every run, test runs with verdicts and failing case labels, transcript segments from both speakers, and markers (start, language switch, barge-in, end). `interview/timeline.ts` rebuilds the code at any moment; the replay page after an interview uses it, and the phase 3 feedback report will too.
