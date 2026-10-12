@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
+import { getDiagnostic } from "@/lib/diagnostic";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 import { PATTERN_BY_ID, PATTERNS } from "@/lib/problems/patterns";
 import { complexityOptions, sampleTests, toPublic } from "@/lib/problems/public";
@@ -12,11 +13,16 @@ import { Workspace, type WorkspaceMode } from "./Workspace";
 
 export default async function ProblemPage({ params, searchParams }: PageProps<"/problems/[slug]">) {
   const { slug } = await params;
-  const { mode: modeParam, variant: variantParam, original } = await searchParams;
+  const { mode: modeParam, variant: variantParam, original, from } = await searchParams;
   const base = PROBLEM_BY_SLUG.get(slug);
   if (!base) notFound();
   const { user, goals } = await requireOnboardedUser();
-  const [history, drills] = await Promise.all([getProblemHistory(user.id, slug), getOpenDrills(user.id)]);
+  const [history, drills, diagnostic] = await Promise.all([
+    getProblemHistory(user.id, slug),
+    getOpenDrills(user.id),
+    from === "diagnostic" ? getDiagnostic(user.id) : null,
+  ]);
+  const diagnosticStep = diagnostic && !diagnostic.completedAt ? diagnostic.steps.findIndex((s) => s.slug === slug) : -1;
   const drill = drills.find((d) => d.problemSlug === slug) ?? null;
 
   const reviewDue = !!history.card && history.card.due <= new Date();
@@ -42,7 +48,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
 
   return (
     <Workspace
-      key={`${slug}-${mode}-${variant?.id ?? "original"}`}
+      key={`${slug}-${mode}-${variant?.id ?? "original"}-${diagnosticStep}`}
       problem={toPublic(problem)}
       patternName={PATTERN_BY_ID[problem.pattern].name}
       patternChoices={PATTERNS.map((p) => ({ id: p.id, name: p.name }))}
@@ -57,6 +63,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
       previousAttempts={history.attempts.length}
       solvedBefore={history.attempts.some((a) => a.solved)}
       drill={drill ? { title: drill.title, drill: drill.drill } : null}
+      diagnostic={diagnosticStep >= 0 ? { step: diagnosticStep + 1, total: diagnostic!.steps.length } : null}
       variant={variant ? { id: variant.id, twist: variant.data.twist, originalTitle: base.title } : null}
     />
   );

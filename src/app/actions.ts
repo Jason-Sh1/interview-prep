@@ -69,7 +69,9 @@ export async function saveGoalsAction(form: FormData) {
       );
     }
   }
-  redirect(firstTime || imported.length ? "/today?welcome=1" : "/today");
+  // New users get the diagnostic first (spec 4.1), after any import so it can avoid problems they've solved.
+  if (firstTime) redirect("/diagnostic");
+  redirect(imported.length ? "/today?welcome=1" : "/today");
 }
 
 const attemptSchema = z.object({

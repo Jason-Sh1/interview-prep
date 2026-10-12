@@ -9,7 +9,8 @@ export const LENGTHS = [30, 45, 60] as const;
 
 export const mockConfigSchema = z.object({
   persona: z.enum(PERSONAS),
-  minutes: z.union([z.literal(30), z.literal(45), z.literal(60)]),
+  /** 15 is the onboarding diagnostic's short mock; the setup page offers 30, 45 and 60. */
+  minutes: z.union([z.literal(15), z.literal(30), z.literal(45), z.literal(60)]),
   hintsAllowed: z.boolean(),
   /** Company id from engine/companies.ts, or null for a generic interview. */
   company: z.string().nullable(),

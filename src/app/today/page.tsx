@@ -7,6 +7,7 @@ import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 import { listAssistedSessions } from "@/lib/assisted";
 import { listDebugRounds } from "@/lib/comprehension";
+import { diagnosticPending } from "@/lib/diagnostic";
 import { listMockSessions } from "@/lib/mock";
 import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
 import { getTrackState } from "@/lib/track";
@@ -25,12 +26,13 @@ const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", revi
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
   const { welcome } = await searchParams;
-  const [{ plan, attempts, cards }, whatsNew, mocks, rounds, debugRounds] = await Promise.all([
+  const [{ plan, attempts, cards }, whatsNew, mocks, rounds, debugRounds, diagnosticOpen] = await Promise.all([
     getTrackState(user.id, goals),
     getWhatsNew(goals.targetCompanies).catch(() => [] as WhatsNewItem[]),
     listMockSessions(user.id),
     listAssistedSessions(user.id),
     listDebugRounds(user.id),
+    diagnosticPending(user.id),
   ]);
   // A server component renders once per request, so reading the clock here is safe.
   // eslint-disable-next-line react-hooks/purity
@@ -54,6 +56,18 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
         <div className="card mb-6 border-accent bg-accent-soft p-4 text-sm">
           Your plan is ready. It re-plans after every attempt, so just work down the list.
         </div>
+      )}
+      {/* Only early on: once there's real history the track has already calibrated itself. */}
+      {diagnosticOpen && attempts.length < 6 && (
+        <Link href="/diagnostic" className="card mb-6 flex items-center gap-4 border-accent bg-accent-soft p-4 transition-colors hover:border-accent">
+          <div className="flex-1">
+            <div className="font-medium">Find your starting point</div>
+            <p className="mt-1 text-sm text-muted">
+              Three short problems and a quick voice mock, so the plan starts at your level instead of the beginning.
+            </p>
+          </div>
+          <span className="btn-primary shrink-0">Diagnostic</span>
+        </Link>
       )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

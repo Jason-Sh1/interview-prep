@@ -85,6 +85,26 @@ export const goals = pgTable("goals", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+/**
+ * The onboarding diagnostic (spec 4.1): three short problems and a short
+ * voice mock that set the starting skill estimates. One per user.
+ */
+export const diagnostics = pgTable("diagnostics", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  /** Bank slugs of the solo problems. */
+  problems: jsonb("problems").$type<string[]>().notNull(),
+  /** Bank slug of the voice mock's problem, and its session once started. */
+  mockSlug: text("mock_slug").notNull(),
+  mockSessionId: text("mock_session_id").references(() => mockSessions.id, { onDelete: "set null" }),
+  completedAt: timestamp("completed_at"),
+  skipped: boolean("skipped").notNull().default(false),
+  /** DiagnosticResult from src/lib/diagnostic/plan.ts. */
+  result: jsonb("result").$type<Record<string, unknown>>(),
+});
+
 /** Per-user, per-pattern skill estimate (Elo-style rating with uncertainty). */
 export const patternSkill = pgTable(
   "pattern_skill",
