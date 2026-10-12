@@ -231,6 +231,11 @@ export function Workspace(props: Props) {
           {mode === "mixed" && <Tag>Mixed practice</Tag>}
           <DifficultyBadge difficulty={problem.difficulty} />
           {showPattern ? <Tag tone="accent">{props.patternName}</Tag> : <Tag>Pattern hidden</Tag>}
+          {mode === "learn" && stage === "solving" && (
+            <Link href={`/mock?problem=${problem.slug}`} className="ml-auto text-xs text-accent hover:underline">
+              Do it as a mock interview
+            </Link>
+          )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{problem.title}</h1>
         {mode === "review" && stage === "solving" && (

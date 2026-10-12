@@ -64,7 +64,7 @@ export default async function ProgressPage() {
       <p className="mt-1 text-sm text-muted">
         Ratings per pattern against what your target companies ask. Company profiles are kept current by a weekly research job; each card says when its
         profile was last verified.{" "}
-        {isAdmin(user.email) && (
+        {isAdmin(user) && (
           <Link href="/research" className="text-accent hover:underline">
             Review company research
           </Link>

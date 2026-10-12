@@ -19,6 +19,9 @@ const RUN_TONE: Record<string, "good" | "warn" | "bad" | "neutral" | "accent"> =
   skipped: "neutral",
 };
 
+// Runs started here finish in after(), which is bounded by this route's limit.
+export const maxDuration = 800;
+
 export default async function ResearchPage() {
   await requireAdmin();
   await seedProfiles();

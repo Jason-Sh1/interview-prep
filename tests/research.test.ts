@@ -126,3 +126,19 @@ describe("research job", () => {
     }
   });
 });
+
+describe("research reviewers", () => {
+  it("requires a verified email on the admin list", async () => {
+    const { isAdmin } = await import("@/lib/research/admin");
+    const prev = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = "jason@example.com, other@example.com";
+    try {
+      expect(isAdmin({ email: "Jason@example.com", emailVerified: true })).toBe(true);
+      expect(isAdmin({ email: "jason@example.com", emailVerified: false })).toBe(false);
+      expect(isAdmin({ email: "someone@example.com", emailVerified: true })).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.ADMIN_EMAILS;
+      else process.env.ADMIN_EMAILS = prev;
+    }
+  });
+});
