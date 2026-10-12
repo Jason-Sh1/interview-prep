@@ -33,6 +33,11 @@ export function codeAt(events: SessionEvent[], t = Infinity): { code: string; la
   return { code, language };
 }
 
+/** When the candidate pressed Start (the first start marker), or null before that. */
+export function interviewStartT(events: SessionEvent[]): number | null {
+  return events.find((e) => e.type === "marker" && e.payload.what === "start")?.t ?? null;
+}
+
 export interface Line {
   speaker: Speaker;
   text: string;
@@ -69,6 +74,7 @@ export interface TurnContext {
   sinceCodeChangedMs: number;
 }
 
+/** `now` is on the recording's clock; the interview's own clock starts at the Start press. */
 export function turnContext(events: SessionEvent[], opts: { now: number; totalMs: number; starter: string }): TurnContext {
   const { code, language } = codeAt(events);
   const lines = transcript(events);
@@ -76,9 +82,10 @@ export function turnContext(events: SessionEvent[], opts: { now: number; totalMs
   const lastCandidate = [...lines].reverse().find((l) => l.speaker === "candidate");
   const lastEdit = [...events].reverse().find((e) => e.type === "edit");
   const norm = (s: string) => s.replace(/\s+/g, "");
+  const elapsedMs = Math.max(0, opts.now - (interviewStartT(events) ?? 0));
   return {
-    elapsedMs: opts.now,
-    remainingMs: Math.max(0, opts.totalMs - opts.now),
+    elapsedMs,
+    remainingMs: Math.max(0, opts.totalMs - elapsedMs),
     code,
     language,
     hasCode: code.length > 0 && norm(code) !== norm(opts.starter),

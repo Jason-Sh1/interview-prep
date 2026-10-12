@@ -4,7 +4,7 @@
 // with ANTHROPIC_API_KEY set, Claude rewrites the rubric, hire signal and
 // focus areas on top of them (see ./claude.ts).
 import { APPROACH_WORDS, HINT_WORDS, compareComplexity, isQuestion, spokenComplexity } from "../interview/scripted";
-import { fmtClock, transcript } from "../interview/timeline";
+import { fmtClock, interviewStartT, transcript } from "../interview/timeline";
 import type { SessionEvent } from "../interview/types";
 import { PATTERN_BY_ID } from "../problems/patterns";
 import type { Difficulty, Problem } from "../problems/types";
@@ -162,7 +162,7 @@ export interface FeedbackReport {
 
 /** Shifts a recording so time zero is the Start press, dropping the setup time before it. */
 export function fromStart(events: SessionEvent[], durationMs: number): { events: SessionEvent[]; durationMs: number; offset: number } {
-  const offset = events.find((e) => e.type === "marker" && e.payload.what === "start")?.t ?? 0;
+  const offset = interviewStartT(events) ?? 0;
   if (!offset) return { events, durationMs, offset: 0 };
   const shift = (t: number) => Math.max(0, t - offset);
   return {

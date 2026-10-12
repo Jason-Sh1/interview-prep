@@ -10,7 +10,7 @@ import { claudeEnabled, claudeTurn } from "./interview/claude";
 import { livekitEnabled } from "./interview/livekit";
 import { systemPrompt, turnMessage } from "./interview/prompt";
 import { INITIAL_SCRIPT_STATE, scriptedTurn, type ScriptState } from "./interview/scripted";
-import { codeAt, turnContext } from "./interview/timeline";
+import { codeAt, interviewStartT, turnContext } from "./interview/timeline";
 import {
   SILENT,
   eventSchema,
@@ -95,9 +95,12 @@ export async function getMockSession(id: string, userId?: string): Promise<MockS
  * someone happened to come back, so the report's timings stay real.
  */
 async function expireIfOverdue(s: MockSession): Promise<MockSession> {
-  const limit = s.config.minutes * 60_000 + OVERTIME_MS;
-  if (s.endedAt || sessionClock(s) <= limit) return s;
+  // The interview's time runs from the Start press, so check the cheap bound first.
+  const length = s.config.minutes * 60_000 + OVERTIME_MS;
+  if (s.endedAt || sessionClock(s) <= length) return s;
   const events = await getEvents(s.id);
+  const limit = (interviewStartT(events) ?? 0) + length;
+  if (sessionClock(s) <= limit) return s;
   const endT = Math.min(limit, Math.max(0, ...events.map((e) => e.t)));
   await endMockSession(s, codeAt(events).code || null, endT);
   return { ...s, endedAt: new Date(s.startedAt.getTime() + endT) };
