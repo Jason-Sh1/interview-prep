@@ -11,6 +11,7 @@
 
 import { PATTERN_BY_ID, PATTERNS } from "../problems/patterns";
 import type { Difficulty, PatternId, Problem } from "../problems/types";
+import { daysUntilIn, endOfDayIn, isSameDayIn } from "./day";
 import { COMPANY_BY_ID, patternFrequency, problemAskedByTargets, type CompanyMap } from "./companies";
 import {
   isLearned,
@@ -74,7 +75,13 @@ export interface AttemptSummary {
 
 export interface PlannerInput {
   now: Date;
-  goals: { targetCompanies: string[]; interviewDate: string | null; hoursPerWeek: number };
+  goals: {
+    targetCompanies: string[];
+    interviewDate: string | null;
+    hoursPerWeek: number;
+    /** IANA zone from the browser; "today" is the user's day, not the server's. */
+    timeZone?: string | null;
+  };
   skills: SkillMap;
   /** Recent attempts, any order. */
   attempts: AttemptSummary[];
@@ -110,10 +117,8 @@ export interface DailyPlan {
   stuck: PatternId[];
 }
 
-export function daysUntil(date: string | null, now: Date): number | null {
-  if (!date) return null;
-  const target = new Date(`${date}T23:59:59`);
-  return Math.max(0, Math.ceil((target.getTime() - now.getTime()) / DAY_MS));
+export function daysUntil(date: string | null, now: Date, timeZone?: string): number | null {
+  return daysUntilIn(date, now, timeZone);
 }
 
 export function phaseFor(daysLeft: number | null, skills: SkillMap): Phase {
@@ -135,16 +140,6 @@ function weakness(p: PatternId, skills: SkillMap): number {
   const s = skillOf(skills, p);
   const low = Math.min(1, Math.max(0, (1450 - s.rating) / 600));
   return 0.7 * low + 0.3 * Math.min(1, s.uncertainty / 300);
-}
-
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function endOfDay(d: Date): Date {
-  const e = new Date(d);
-  e.setHours(23, 59, 59, 999);
-  return e;
 }
 
 function companyNames(targets: string[], companies: CompanyMap): string {
@@ -192,14 +187,15 @@ function reasonFor(
 
 export function buildPlan(input: PlannerInput): DailyPlan {
   const { now, skills, problems } = input;
-  const daysLeft = daysUntil(input.goals.interviewDate, now);
+  const tz = input.goals.timeZone ?? undefined;
+  const daysLeft = daysUntil(input.goals.interviewDate, now, tz);
   const phase = phaseFor(daysLeft, skills);
   const w = PHASE_WEIGHTS[phase];
   const budget = dailyMinutes(input.goals.hoursPerWeek);
   const bySlug = new Map(problems.map((p) => [p.slug, p]));
 
   const solved = new Set(input.attempts.filter((a) => a.solved).map((a) => a.problemSlug));
-  const today = input.attempts.filter((a) => isSameDay(a.finishedAt, now));
+  const today = input.attempts.filter((a) => isSameDayIn(a.finishedAt, now, tz));
   const doneToday = [...new Set(today.map((a) => a.problemSlug))];
   const doneSet = new Set(doneToday);
   const recentPatterns = [...input.attempts]
@@ -236,7 +232,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
 
   type Candidate = Omit<PlanItem, "reason"> & { overdueDays: number; fresh: boolean };
   const candidates: Candidate[] = [];
-  const endToday = endOfDay(now);
+  const endToday = endOfDayIn(now, tz);
 
   // Due reviews. A missed day just leaves more cards due; the budget caps how
   // many land today and the most overdue rank first, so nothing piles up.
@@ -268,14 +264,16 @@ export function buildPlan(input: PlannerInput): DailyPlan {
   }
 
   // Stuck patterns get one bridge problem: the easiest problem below the ones
-  // that were just failed, even if it was solved before. If there is nothing
-  // easier, the pattern stays open and the UI points to its concept refresher.
+  // in the current run of failures, even if it was solved before. If there is
+  // nothing easier, the pattern stays open and the UI points to its concept refresher.
   const bridged = new Set<PatternId>();
   for (const pattern of stuck) {
-    const failedRatings = input.attempts
-      .filter((a) => a.pattern === pattern && !a.solved)
-      .map((a) => bySlug.get(a.problemSlug)?.rating ?? Infinity);
-    const ceiling = Math.min(...failedRatings);
+    const history = input.attempts
+      .filter((a) => a.pattern === pattern)
+      .sort((a, b) => b.finishedAt.getTime() - a.finishedAt.getTime());
+    const firstSolve = history.findIndex((a) => a.solved);
+    const streak = firstSolve === -1 ? history : history.slice(0, firstSolve);
+    const ceiling = Math.min(...streak.map((a) => bySlug.get(a.problemSlug)?.rating ?? Infinity));
     const bridge = problems
       .filter((p) => p.pattern === pattern && p.rating < ceiling && !doneSet.has(p.slug))
       .sort((a, b) => a.rating - b.rating)[0];
@@ -353,7 +351,8 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     let bestScore = -Infinity;
     for (let i = 0; i < pool.length; i++) {
       const c = pool[i];
-      if (items.length > 0 && used + c.minutes > budget) continue;
+      // The first item may run over budget only on a day with nothing done yet.
+      if (used + c.minutes > budget && !(items.length === 0 && used === 0)) continue;
       const adj = c.score - PATTERN_REPEAT_PENALTY * (perPattern.get(c.pattern) ?? 0);
       if (adj > bestScore) {
         bestScore = adj;

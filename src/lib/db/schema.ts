@@ -79,6 +79,8 @@ export const goals = pgTable("goals", {
   interviewDate: date("interview_date", { mode: "string" }),
   hoursPerWeek: integer("hours_per_week").notNull().default(7),
   language: text("language").notNull().default("python"),
+  /** IANA time zone from the browser, so plan days follow the user's clock. */
+  timeZone: text("time_zone"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

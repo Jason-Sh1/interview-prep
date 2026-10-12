@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
+import { isValidTimeZone } from "@/lib/engine/day";
 import type { PlanItem } from "@/lib/engine/planner";
-import { PROBLEMS } from "@/lib/problems";
+import { matchImported } from "@/lib/problems/import";
 import { getGoals, getTrackState, recordAttempt, saveGoals, type AttemptResult } from "@/lib/track";
 
 const goalsSchema = z.object({
@@ -16,25 +17,12 @@ const goalsSchema = z.object({
     .nullable(),
   hoursPerWeek: z.coerce.number().int().min(1).max(60),
   language: z.enum(["python", "javascript"]),
+  timeZone: z
+    .string()
+    .max(64)
+    .nullable()
+    .transform((tz) => (tz && isValidTimeZone(tz) ? tz : null)),
 });
-
-/** Matches pasted LeetCode links or titles to problems in the bank. */
-function matchImported(text: string): string[] {
-  const lines = text
-    .split(/[\n,]/)
-    .map((l) => l.trim().toLowerCase())
-    .filter(Boolean);
-  const found = new Set<string>();
-  for (const p of PROBLEMS) {
-    if (!p.source) continue;
-    const lcSlug = p.source.url.match(/problems\/([^/]+)/)?.[1] ?? "";
-    const lcTitle = p.source.name.replace(/^leetcode\s*\d+\.?\s*/i, "").toLowerCase();
-    if (lines.some((l) => (lcSlug && l.includes(lcSlug)) || l === lcTitle || l.replace(/^\d+\.\s*/, "") === lcTitle)) {
-      found.add(p.slug);
-    }
-  }
-  return [...found];
-}
 
 export async function saveGoalsAction(form: FormData) {
   const user = await requireUser();
@@ -44,6 +32,7 @@ export async function saveGoalsAction(form: FormData) {
     interviewDate: form.get("interviewDate") || null,
     hoursPerWeek: form.get("hoursPerWeek"),
     language: form.get("language"),
+    timeZone: form.get("timeZone") || null,
   });
   const firstTime = !(await getGoals(user.id));
   await saveGoals(user.id, parsed);
@@ -97,15 +86,22 @@ const attemptSchema = z.object({
   confidence: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).nullable(),
   complexityChoice: z.string().nullable(),
   code: z.string().nullable(),
+  /** The browser's zone; it keeps goals.timeZone current for users who set goals before it was recorded. */
+  timeZone: z.string().max(64).optional(),
 });
 
 export async function recordAttemptAction(
   input: z.input<typeof attemptSchema>,
 ): Promise<{ result: AttemptResult; next: PlanItem | null }> {
   const user = await requireUser();
-  const result = await recordAttempt(user.id, attemptSchema.parse(input));
-  const goals = await getGoals(user.id);
+  const { timeZone, ...attempt } = attemptSchema.parse(input);
+  const result = await recordAttempt(user.id, attempt);
+  let goals = await getGoals(user.id);
   let next: PlanItem | null = null;
+  if (goals && timeZone && timeZone !== goals.timeZone && isValidTimeZone(timeZone)) {
+    goals = { ...goals, timeZone };
+    await saveGoals(user.id, goals);
+  }
   if (goals) {
     next = (await getTrackState(user.id, goals)).plan.items[0] ?? null;
   }
