@@ -3,7 +3,9 @@ import type { PatternId } from "../problems/types";
 // How much each company's coding rounds lean on each pattern, from 0 to 1.
 // These are hand-made starting estimates from public interview write-ups and
 // the frequency lists in the spec's research. The weekly research job
-// (spec 4.6) will replace them with sourced, dated profiles.
+// (spec 4.6, src/lib/research) keeps sourced, dated versions in the database;
+// once a version is approved it replaces the estimate here. Every function
+// takes the live profiles as an optional last argument.
 
 export interface CompanyProfile {
   id: string;
@@ -104,19 +106,21 @@ export const COMPANY_BY_ID = Object.fromEntries(COMPANIES.map((c) => [c.id, c]))
   CompanyProfile
 >;
 
-export function emphasisFor(companyId: string, pattern: PatternId): number {
-  return COMPANY_BY_ID[companyId]?.emphasis[pattern] ?? DEFAULT_EMPHASIS;
+export type CompanyMap = Record<string, CompanyProfile>;
+
+export function emphasisFor(companyId: string, pattern: PatternId, companies: CompanyMap = COMPANY_BY_ID): number {
+  return companies[companyId]?.emphasis[pattern] ?? DEFAULT_EMPHASIS;
 }
 
 /** Average emphasis of a pattern across the user's target companies (0.5 when none). */
-export function patternFrequency(targets: string[], pattern: PatternId): number {
-  const known = targets.filter((t) => COMPANY_BY_ID[t]);
+export function patternFrequency(targets: string[], pattern: PatternId, companies: CompanyMap = COMPANY_BY_ID): number {
+  const known = targets.filter((t) => companies[t]);
   if (!known.length) return 0.5;
-  return known.reduce((s, t) => s + emphasisFor(t, pattern), 0) / known.length;
+  return known.reduce((s, t) => s + emphasisFor(t, pattern, companies), 0) / known.length;
 }
 
 /** Whether a problem's company list mentions one of the targets. */
-export function problemAskedByTargets(problemCompanies: string[], targets: string[]): boolean {
-  const names = new Set(targets.map((t) => COMPANY_BY_ID[t]?.name.toLowerCase()).filter(Boolean));
+export function problemAskedByTargets(problemCompanies: string[], targets: string[], companies: CompanyMap = COMPANY_BY_ID): boolean {
+  const names = new Set(targets.map((t) => companies[t]?.name.toLowerCase()).filter(Boolean));
   return problemCompanies.some((c) => names.has(c.toLowerCase()));
 }

@@ -10,6 +10,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -270,4 +271,54 @@ export const assistedEvents = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("assisted_events_session_t_idx").on(t.sessionId, t.t)],
+);
+
+// ---------------------------------------------------------------------------
+// Company research (spec 4.6)
+
+/** One run of the research job: weekly from cron, or started by hand. */
+export const researchRuns = pgTable("research_runs", {
+  id: serial("id").primaryKey(),
+  /** "cron", "manual" or "cli". */
+  trigger: text("trigger").notNull(),
+  /** "running", "done", "failed" or "skipped" (no API key). */
+  status: text("status").notNull(),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  /** Per company: "queued" (a new version waits for review), "unchanged" or "failed". */
+  results: jsonb("results").$type<{ companyId: string; result: string; error?: string }[]>().notNull().default([]),
+  error: text("error"),
+});
+
+/**
+ * Versioned company profiles. Version 1 is the built-in estimate; later
+ * versions come from research runs and wait in the review queue until a
+ * person approves them. The planner uses each company's latest approved one.
+ */
+export const companyProfiles = pgTable(
+  "company_profiles",
+  {
+    id: serial("id").primaryKey(),
+    companyId: text("company_id").notNull(),
+    version: integer("version").notNull(),
+    /** "pending", "approved" or "rejected". */
+    status: text("status").notNull(),
+    /** "seed" (the built-in estimate) or "claude" (a research run). */
+    generator: text("generator").notNull(),
+    /** ProfileData from src/lib/research/profiles.ts. */
+    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+    /** What changed from the version before, for reviewers and the What's new panel. */
+    changes: jsonb("changes").$type<string[]>().notNull().default([]),
+    sources: jsonb("sources").$type<{ url: string; title: string; published?: string }[]>().notNull().default([]),
+    runId: integer("run_id").references(() => researchRuns.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    /** When research last confirmed this version still holds. */
+    verifiedAt: timestamp("verified_at"),
+    reviewedAt: timestamp("reviewed_at"),
+    reviewedBy: text("reviewed_by"),
+  },
+  (t) => [
+    uniqueIndex("company_profiles_company_version_idx").on(t.companyId, t.version),
+    index("company_profiles_status_idx").on(t.status, t.reviewedAt),
+  ],
 );

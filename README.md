@@ -13,7 +13,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
 
-Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too. Next up: the research job that keeps company data current.
+Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
 
 ## Running it
 
@@ -46,6 +46,7 @@ npm run typecheck
 | Learning engine | Pure functions, unit tested | `src/lib/engine` |
 | Mock interviews | Interviewer, timeline and prompts in `src/lib/interview`; data access in `src/lib/mock.ts` | Pages in `src/app/mock`, API in `src/app/api/mock` |
 | Feedback reports | Analysis and grading in `src/lib/feedback` | Shown on the recap page, `src/app/mock/[id]` |
+| Company research | Research job, versions and review queue in `src/lib/research` | Review page `src/app/research`, cron route `src/app/api/cron/research` |
 | AI-assisted rounds | Tasks, assistant, harness and grading in `src/lib/assisted` | Pages in `src/app/assisted`, API in `src/app/api/assisted` |
 | Voice agent | LiveKit Agents worker, its own package | `agent/` |
 
@@ -106,4 +107,13 @@ Modeled on the AI-enabled rounds companies such as Meta and Shopify now run: you
 - **Tests run in your browser**: `assisted/harness.ts` builds a small CommonJS + Jest-style runner over the repo files and runs it in a Web Worker.
 - **Recording**: prompts, answers (with planted bugs), snapshots, pastes (and whether they came from an answer) and test runs go to `assisted_events`.
 - **Grading** (`assisted/grade.ts`) scores decomposition, prompt quality, review of AI output, correctness and ownership, reports every planted bug as caught, missed or not used, and gives a hire signal. With a key, Claude (`claude-opus-5-5`) writes the rubric from the same evidence, keeping the measured bug outcomes and test results.
+
+### Keeping interview data current (spec 4.6)
+
+Company profiles (each company's pattern mix, loop, and AI tool policy) are versioned in `company_profiles`. Version 1 of each is the hand estimate in `engine/companies.ts`.
+
+- **Research runs** (`research/claude.ts`, needs `ANTHROPIC_API_KEY`): for each company, Claude (`claude-opus-5-5`, override with `RESEARCH_MODEL`) searches the web for reports from the last 12 months and writes notes with sources. A second call turns the notes into a structured profile. Any source that wasn't actually returned by a search is dropped, and a profile with no verified source is discarded.
+- **Review queue** (`/research`): a profile that changes something (an AI policy, a pattern weight moving by 0.15 or more, a new loop description or note) waits there as a pending version, showing what changed, a before/after view and its sources. Approving it updates every user's plan and the skill map. A profile that still holds just gets its "last verified" date and sources refreshed. Reviewers are the emails in `ADMIN_EMAILS`; with that unset, anyone signed in can review in development, and nobody can in production.
+- **Schedule**: `vercel.json` calls `/api/cron/research` every Monday, authorized by `CRON_SECRET`. Any scheduler can call it the same way, with `Authorization: Bearer $CRON_SECRET`. Run it by hand from `/research` or with `npm run research [company-id ...]`.
+- **What users see**: a "What's new in interviews" panel on Today for approved changes from the last 45 days (target companies first), and "verified" dates with sources on the skill map.
 

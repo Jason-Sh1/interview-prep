@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { DifficultyBadge, Tag } from "@/components/badges";
+import { SourceList } from "@/components/SourceList";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { PHASE_INFO, type ItemKind } from "@/lib/engine/planner";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
+import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
 import { getTrackState } from "@/lib/track";
 
 const KIND_LABEL: Record<ItemKind, { label: string; tone: "accent" | "good" | "warn" | "neutral" }> = {
@@ -18,7 +20,10 @@ const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", revi
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
   const { welcome } = await searchParams;
-  const { plan, attempts } = await getTrackState(user.id, goals);
+  const [{ plan, attempts }, whatsNew] = await Promise.all([
+    getTrackState(user.id, goals),
+    getWhatsNew(goals.targetCompanies).catch(() => [] as WhatsNewItem[]),
+  ]);
   const phase = PHASE_INFO[plan.phase];
   const totalMinutes = plan.items.reduce((m, i) => m + i.minutes, 0);
   const todayAttempts = attempts.filter((a) => plan.doneToday.includes(a.problemSlug));
@@ -97,6 +102,8 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
         </div>
       )}
 
+      {whatsNew.length > 0 && <WhatsNew items={whatsNew} targets={goals.targetCompanies} />}
+
       {todayAttempts.length > 0 && (
         <section className="mt-10">
           <h2 className="text-sm font-medium text-muted">Done today</h2>
@@ -114,5 +121,38 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
         </section>
       )}
     </main>
+  );
+}
+
+function WhatsNew({ items, targets }: { items: WhatsNewItem[]; targets: string[] }) {
+  const shown = items.slice(0, 4);
+  return (
+    <section className="mt-10">
+      <h2 className="text-sm font-medium text-muted">What&apos;s new in interviews</h2>
+      <p className="text-xs text-muted">From this week&apos;s research. Your plan already reflects it.</p>
+      <ul className="mt-2 space-y-2">
+        {shown.map((item) => (
+          <li key={item.companyId} className="card p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{item.name}</span>
+              {targets.includes(item.companyId) && <Tag tone="accent">Your target</Tag>}
+              <span className="text-xs text-muted" suppressHydrationWarning>
+                {item.approvedAt.toLocaleDateString(undefined, { dateStyle: "medium" })}
+              </span>
+            </div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {item.changes.slice(0, 4).map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+            {item.sources.length > 0 && (
+              <div className="mt-1 text-xs text-muted">
+                Sources: <SourceList sources={item.sources} compact />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

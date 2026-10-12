@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
-import { buildPlan, type PlanItem } from "@/lib/engine/planner";
+import type { PlanItem } from "@/lib/engine/planner";
 import { PROBLEMS } from "@/lib/problems";
 import { getGoals, getTrackState, recordAttempt, saveGoals, type AttemptResult } from "@/lib/track";
 
@@ -107,8 +107,7 @@ export async function recordAttemptAction(
   const goals = await getGoals(user.id);
   let next: PlanItem | null = null;
   if (goals) {
-    const s = await getTrackState(user.id, goals);
-    next = buildPlan({ now: new Date(), goals, skills: s.skills, attempts: s.attempts, cards: s.cards, problems: PROBLEMS }).items[0] ?? null;
+    next = (await getTrackState(user.id, goals)).plan.items[0] ?? null;
   }
   return { result, next };
 }
