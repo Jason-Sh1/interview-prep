@@ -1,8 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 import { Tag } from "@/components/badges";
+import { ReportPending } from "@/components/ReportPending";
 import { HIRE_LABELS, RUBRIC, RUBRIC_INFO, type FeedbackReport, type HireSignal, type Moment } from "@/lib/feedback/analyze";
 import type { TrackChange } from "@/lib/feedback/track-update";
 import { fmtClock } from "@/lib/interview/timeline";
@@ -20,28 +19,13 @@ const SIGNAL_TONE: Record<HireSignal, "good" | "warn" | "bad"> = {
 const SCORE_LABEL = ["", "Well below the bar", "Below the bar", "Meets the bar", "Strong"];
 const SCORE_BAR = ["", "bg-bad", "bg-warn", "bg-good", "bg-good"];
 
-/** Shown until the report exists: asks the server to build it, then reloads the page. */
-export function ReportPending({ sessionId, usesClaude }: { sessionId: string; usesClaude: boolean }) {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    generateReportAction(sessionId)
-      .then(() => router.refresh())
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Something went wrong"));
-  }, [sessionId, router]);
+export function MockReportPending({ sessionId, usesClaude }: { sessionId: string; usesClaude: boolean }) {
   return (
-    <div className="card mt-4 bg-surface-2 p-4 text-sm">
-      {error ? (
-        <p className="text-bad">Couldn&apos;t build the feedback report: {error}</p>
-      ) : (
-        <p className="animate-pulse">
-          Building your feedback report{usesClaude ? ": Claude is reviewing the code timeline and transcript" : ""}…
-        </p>
-      )}
-    </div>
+    <ReportPending
+      id={sessionId}
+      generate={generateReportAction}
+      message={`Building your feedback report${usesClaude ? ": Claude is reviewing the code timeline and transcript" : ""}…`}
+    />
   );
 }
 

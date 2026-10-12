@@ -13,7 +13,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
 
-Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. Next up: AI-assisted coding rounds and the research job that keeps company data current.
+Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too. Next up: the research job that keeps company data current.
 
 ## Running it
 
@@ -46,6 +46,7 @@ npm run typecheck
 | Learning engine | Pure functions, unit tested | `src/lib/engine` |
 | Mock interviews | Interviewer, timeline and prompts in `src/lib/interview`; data access in `src/lib/mock.ts` | Pages in `src/app/mock`, API in `src/app/api/mock` |
 | Feedback reports | Analysis and grading in `src/lib/feedback` | Shown on the recap page, `src/app/mock/[id]` |
+| AI-assisted rounds | Tasks, assistant, harness and grading in `src/lib/assisted` | Pages in `src/app/assisted`, API in `src/app/api/assisted` |
 | Voice agent | LiveKit Agents worker, its own package | `agent/` |
 
 ### The learning engine (spec 4.2)
@@ -95,3 +96,14 @@ When a mock ends, its recap page builds a report from the recorded timeline:
 - **Fed back into your plan**: a weak mock lowers that pattern's rating (a mock never raises it; practice attempts do that), and an unsolved or shaky problem comes back as a re-solve due today.
 
 The numbers always come from `feedback/analyze.ts`, which is rule-based. With `ANTHROPIC_API_KEY` set, `feedback/claude.ts` also sends the transcript, test runs, code at key moments and those numbers to Claude (`claude-opus-5-5`, structured output) to write the rubric, hire signal and focus areas; if that call fails, the rule-based report is used. Reports are stored in `feedback_reports` and built once per interview.
+
+### AI-assisted coding rounds (spec 4.5)
+
+Modeled on the AI-enabled rounds companies such as Meta and Shopify now run: you get a small multi-file repo, a brief, and a chat assistant, and you are graded on how you use it, not only on whether the tests pass.
+
+- **Tasks** live in `src/lib/assisted/tasks`, one file each: the starter files, visible and hidden tests, a reference solution, the requirements, and the bugs the assistant can plant. Tests in `tests/assisted.test.ts` check that each reference passes, each starter fails, and each planted bug fails a hidden test.
+- **The assistant** never edits your files; you paste what you want. With `ANTHROPIC_API_KEY` set you pick a Claude model, and in some answers it is asked to slip in one subtle bug, which it labels for the grader (the label is stripped before you see it). Without a key a scripted practice assistant answers from canned replies per task and plants bugs the same way.
+- **Tests run in your browser**: `assisted/harness.ts` builds a small CommonJS + Jest-style runner over the repo files and runs it in a Web Worker.
+- **Recording**: prompts, answers (with planted bugs), snapshots, pastes (and whether they came from an answer) and test runs go to `assisted_events`.
+- **Grading** (`assisted/grade.ts`) scores decomposition, prompt quality, review of AI output, correctness and ownership, reports every planted bug as caught, missed or not used, and gives a hire signal. With a key, Claude (`claude-opus-5-5`) writes the rubric from the same evidence, keeping the measured bug outcomes and test results.
+
