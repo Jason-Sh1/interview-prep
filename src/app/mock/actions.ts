@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
+import { generateReport } from "@/lib/feedback";
 import { createMockSession, endMockSession, getMockSession } from "@/lib/mock";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 
@@ -38,4 +39,12 @@ export async function endMockAction(id: string, finalCode: string | null) {
   const session = await getMockSession(id, user.id);
   if (!session) throw new Error("Unknown session");
   await endMockSession(session, finalCode?.slice(0, 100_000) ?? null);
+}
+
+/** Builds the feedback report for a finished interview (and feeds it into the track). */
+export async function generateReportAction(id: string): Promise<void> {
+  const user = await requireUser();
+  const session = await getMockSession(id, user.id);
+  if (!session) throw new Error("Unknown session");
+  await generateReport(session);
 }

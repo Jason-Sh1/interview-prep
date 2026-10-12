@@ -101,9 +101,9 @@ export function compareComplexity(said: string, optimal: string): -1 | 0 | 1 | n
 }
 
 const QUESTION_START = /^(can|could|do|does|is|are|should|will|would|what|how|which|when|where|may|am i)\b/;
-const APPROACH_WORDS =
+export const APPROACH_WORDS =
   /\b(hash ?(map|set|table)|dictionary|set|sort|two pointers?|pointer|sliding window|window|stack|queue|heap|priority queue|binary search|bfs|dfs|breadth|depth|recurs\w*|memo\w*|dynamic programming|dp|greedy|graph|tree|trie|union find|iterate|loop|brute force|my approach|i would|i'd|i will|i'll|the idea)\b/;
-const HINT_WORDS = /\b(hint|i'?m stuck|i am stuck|no idea|not sure how|don'?t know how|help me)\b/;
+export const HINT_WORDS = /\b(hint|i'?m stuck|i am stuck|no idea|not sure how|don'?t know how|help me)\b/;
 
 export function isQuestion(text: string): boolean {
   const t = text.trim().toLowerCase();

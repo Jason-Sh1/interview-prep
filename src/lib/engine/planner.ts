@@ -78,7 +78,8 @@ export interface PlannerInput {
   skills: SkillMap;
   /** Recent attempts, any order. */
   attempts: AttemptSummary[];
-  cards: { problemSlug: string; due: Date }[];
+  /** FSRS cards; `reps` 0 means never reviewed (e.g. added by mock feedback). */
+  cards: { problemSlug: string; due: Date; reps?: number }[];
   problems: Problem[];
 }
 
@@ -153,7 +154,7 @@ function companyNames(targets: string[]): string {
 function reasonFor(
   item: Omit<PlanItem, "reason">,
   w: Weights,
-  ctx: { input: PlannerInput; problem: Problem; overdueDays: number },
+  ctx: { input: PlannerInput; problem: Problem; overdueDays: number; fresh: boolean },
 ): string {
   const { input, problem } = ctx;
   const pattern = PATTERN_BY_ID[item.pattern].name;
@@ -161,6 +162,7 @@ function reasonFor(
     return `You missed two ${pattern} problems in a row; this easier one rebuilds the idea before you retry.`;
   }
   if (item.kind === "review") {
+    if (ctx.fresh) return "From your mock interview: solve it again from scratch, saying your approach out loud first.";
     const when =
       ctx.overdueDays >= 1 ? `overdue by ${Math.floor(ctx.overdueDays)} day${ctx.overdueDays >= 2 ? "s" : ""}` : "due today";
     return `Review ${when}: re-derive the approach out loud in 2 minutes, or re-implement it against the clock.`;
@@ -230,7 +232,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     w.novelty * c.novelty -
     w.recent * c.recent;
 
-  type Candidate = Omit<PlanItem, "reason"> & { overdueDays: number };
+  type Candidate = Omit<PlanItem, "reason"> & { overdueDays: number; fresh: boolean };
   const candidates: Candidate[] = [];
   const endToday = endOfDay(now);
 
@@ -254,10 +256,12 @@ export function buildPlan(input: PlannerInput): DailyPlan {
       pattern: p.pattern,
       kind: "review",
       hidePattern: false,
-      minutes: ITEM_MINUTES.review,
+      // A re-solve from mock feedback is a full attempt, not a quick review.
+      minutes: card.reps === 0 ? ITEM_MINUTES[p.difficulty] : ITEM_MINUTES.review,
       score: total(components),
       components,
       overdueDays,
+      fresh: card.reps === 0,
     });
   }
 
@@ -293,6 +297,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
       score: total(components) + 1,
       components,
       overdueDays: 0,
+      fresh: false,
     });
   }
 
@@ -324,6 +329,7 @@ export function buildPlan(input: PlannerInput): DailyPlan {
       score: total(components),
       components,
       overdueDays: 0,
+      fresh: false,
     });
   }
 
@@ -355,8 +361,8 @@ export function buildPlan(input: PlannerInput): DailyPlan {
     if (best === -1) break;
     const [c] = pool.splice(best, 1);
     const problem = bySlug.get(c.slug)!;
-    const { overdueDays, ...item } = c;
-    items.push({ ...item, reason: reasonFor(item, w, { input, problem, overdueDays }) });
+    const { overdueDays, fresh, ...item } = c;
+    items.push({ ...item, reason: reasonFor(item, w, { input, problem, overdueDays, fresh }) });
     used += c.minutes;
     perPattern.set(c.pattern, (perPattern.get(c.pattern) ?? 0) + 1);
   }

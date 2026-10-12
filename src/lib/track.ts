@@ -8,8 +8,10 @@ import { gradeFor, cardFromJson, cardToJson, newCard, reviewCard, type Confidenc
 import type { SkillMap } from "./engine/mastery";
 import { buildPlan, type AttemptSummary, type DailyPlan } from "./engine/planner";
 import { attemptScore, INITIAL_RATING, INITIAL_UNCERTAINTY, isFastTrack, updateSkill } from "./engine/rating";
+import type { FeedbackReport } from "./feedback/analyze";
+import { planMockUpdate, type TrackChange } from "./feedback/track-update";
 import { PROBLEM_BY_SLUG, PROBLEMS } from "./problems";
-import type { PatternId } from "./problems/types";
+import type { PatternId, Problem } from "./problems/types";
 import type { Language } from "./runner/drivers";
 import { judge0Enabled, runOnJudge0 } from "./runner/judge0";
 
@@ -265,6 +267,51 @@ export async function recordAttempt(userId: string, input: AttemptInput, now = n
     nextReview: nextReview?.toISOString() ?? null,
     stuck: failStreak >= 2,
   };
+}
+
+/**
+ * Feeds a mock interview's feedback into the track: weaknesses lower the
+ * pattern rating, and a failed or shaky solve comes back as a re-solve due
+ * today (spec 4.2 "Mock feedback loop"). Returns what changed, for the report.
+ */
+export async function applyMockFeedback(userId: string, problem: Problem, report: FeedbackReport, now = new Date()): Promise<TrackChange[]> {
+  await ensureMigrated();
+  const changes: TrackChange[] = [];
+  const [row] = await db
+    .select()
+    .from(schema.patternSkill)
+    .where(and(eq(schema.patternSkill.userId, userId), eq(schema.patternSkill.pattern, problem.pattern)));
+  const before = row ?? { rating: INITIAL_RATING, uncertainty: INITIAL_UNCERTAINTY };
+  const plan = planMockUpdate(report, before, problem.rating);
+
+  if (plan.skill) {
+    await db
+      .insert(schema.patternSkill)
+      .values({ userId, pattern: problem.pattern, rating: plan.skill.rating, uncertainty: plan.skill.uncertainty })
+      .onConflictDoUpdate({
+        target: [schema.patternSkill.userId, schema.patternSkill.pattern],
+        set: { rating: plan.skill.rating, uncertainty: plan.skill.uncertainty },
+      });
+    changes.push({ kind: "rating", pattern: problem.pattern, before: before.rating, after: plan.skill.rating });
+  }
+
+  if (plan.resolve) {
+    const [existing] = await db
+      .select({ problemSlug: schema.reviewCards.problemSlug })
+      .from(schema.reviewCards)
+      .where(and(eq(schema.reviewCards.userId, userId), eq(schema.reviewCards.problemSlug, problem.slug)));
+    if (existing) {
+      await db
+        .update(schema.reviewCards)
+        .set({ due: now })
+        .where(and(eq(schema.reviewCards.userId, userId), eq(schema.reviewCards.problemSlug, problem.slug)));
+    } else {
+      const card = newCard(now);
+      await db.insert(schema.reviewCards).values({ userId, problemSlug: problem.slug, due: now, card: cardToJson(card), reps: 0, lapses: 0 });
+    }
+    changes.push({ kind: "review", slug: problem.slug, title: problem.title });
+  }
+  return changes;
 }
 
 /** Attempts in the last `days` days, for the progress page. */

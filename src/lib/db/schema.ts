@@ -204,3 +204,25 @@ export const sessionEvents = pgTable(
   },
   (t) => [index("session_events_session_t_idx").on(t.sessionId, t.t)],
 );
+
+// ---------------------------------------------------------------------------
+// Feedback reports (spec 4.4)
+
+/**
+ * One report per finished mock interview. `report` is the FeedbackReport
+ * from src/lib/feedback/analyze.ts; `trackChanges` records what it changed in
+ * the learning track, which is applied once, when the report is created.
+ */
+export const feedbackReports = pgTable("feedback_reports", {
+  sessionId: text("session_id")
+    .primaryKey()
+    .references(() => mockSessions.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** "claude" or "heuristic". */
+  generator: text("generator").notNull(),
+  report: jsonb("report").$type<Record<string, unknown>>().notNull(),
+  trackChanges: jsonb("track_changes").$type<Record<string, unknown>[]>().notNull().default([]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
