@@ -153,6 +153,27 @@ export interface FeedbackReport {
   outcome: Outcome;
   moments: Moment[];
   focus: FocusArea[];
+  /**
+   * Where the interview actually began (the Start press) on the recording's
+   * clock. Every time in the report counts from there; add this to jump the replay.
+   */
+  startOffsetMs?: number;
+}
+
+/** Shifts a recording so time zero is the Start press, dropping the setup time before it. */
+export function fromStart(events: SessionEvent[], durationMs: number): { events: SessionEvent[]; durationMs: number; offset: number } {
+  const offset = events.find((e) => e.type === "marker" && e.payload.what === "start")?.t ?? 0;
+  if (!offset) return { events, durationMs, offset: 0 };
+  const shift = (t: number) => Math.max(0, t - offset);
+  return {
+    offset,
+    durationMs: shift(durationMs),
+    events: events.map((e) =>
+      e.type === "transcript" && e.payload.startT !== undefined
+        ? { ...e, t: shift(e.t), payload: { ...e.payload, startT: shift(e.payload.startT) } }
+        : { ...e, t: shift(e.t) },
+    ),
+  };
 }
 
 export interface AnalyzeInput {

@@ -60,7 +60,7 @@ export function Recap(props: Props) {
         {props.interviewer === "claude" ? "Claude" : "scripted"}, {props.voice === "livekit" ? "LiveKit" : "browser"} voice
       </p>
       {props.report ? (
-        <ReportView report={props.report.report} trackChanges={props.report.trackChanges} onJump={setT} />
+        <ReportView report={props.report.report} trackChanges={props.report.trackChanges} onJump={(t) => setT(t + (props.report?.report.startOffsetMs ?? 0))} />
       ) : (
         <MockReportPending sessionId={props.sessionId} usesClaude={props.usesClaude} />
       )}

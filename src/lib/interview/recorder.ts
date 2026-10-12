@@ -6,6 +6,8 @@ import type { EditOp, SessionEvent } from "./types";
 const FLUSH_MS = 2000;
 const SNAPSHOT_MS = 15_000;
 const MAX_BATCH = 400;
+/** The events route accepts at most this many ops per edit event. */
+const MAX_OPS = 500;
 
 export class Recorder {
   private queue: SessionEvent[] = [];
@@ -35,7 +37,8 @@ export class Recorder {
 
   edit(ops: EditOp[], code: string, language: Language) {
     if (!ops.length) return;
-    this.push({ type: "edit", t: this.now(), payload: { ops } });
+    // A replace-all can produce thousands of ops; split so no event is rejected.
+    for (let i = 0; i < ops.length; i += MAX_OPS) this.push({ type: "edit", t: this.now(), payload: { ops: ops.slice(i, i + MAX_OPS) } });
     this.dirtySinceSnapshot = true;
     if (this.now() - this.lastSnapshotAt > SNAPSHOT_MS) this.snapshot(code, language);
   }
@@ -64,7 +67,9 @@ export class Recorder {
             body: JSON.stringify({ events: batch }),
             keepalive: true,
           });
-          if (!res.ok && res.status !== 409) throw new Error(`HTTP ${res.status}`);
+          // 409: the session ended. 400: the batch can never be accepted, so
+          // drop it rather than block every later event behind it.
+          if (!res.ok && res.status !== 409 && res.status !== 400) throw new Error(`HTTP ${res.status}`);
           this.queue.splice(0, batch.length);
           this.failed = false;
         } catch {

@@ -3,14 +3,14 @@ import "server-only";
 // interviewer turns (Claude when configured, the scripted interviewer otherwise).
 
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./db";
 import { COMPANY_BY_ID } from "./engine/companies";
 import { claudeEnabled, claudeTurn } from "./interview/claude";
 import { livekitEnabled } from "./interview/livekit";
 import { systemPrompt, turnMessage } from "./interview/prompt";
 import { INITIAL_SCRIPT_STATE, scriptedTurn, type ScriptState } from "./interview/scripted";
-import { turnContext } from "./interview/timeline";
+import { codeAt, turnContext } from "./interview/timeline";
 import {
   SILENT,
   eventSchema,
@@ -78,12 +78,29 @@ export async function createMockSession(userId: string, input: { slug: string; c
   return id;
 }
 
-/** The session, if it exists and (when a user is given) belongs to them. */
+/** How long past its length an open session may run before it's ended for the candidate. */
+export const OVERTIME_MS = 15 * 60_000;
+
+/** The session, if it exists and (when a user is given) belongs to them. Ends it first if it was abandoned. */
 export async function getMockSession(id: string, userId?: string): Promise<MockSession | null> {
   await ensureMigrated();
   const where = userId ? and(eq(schema.mockSessions.id, id), eq(schema.mockSessions.userId, userId)) : eq(schema.mockSessions.id, id);
   const [r] = await db.select().from(schema.mockSessions).where(where);
-  return r ? fromRow(r) : null;
+  return r ? expireIfOverdue(fromRow(r)) : null;
+}
+
+/**
+ * Ends a session left open well past its length (usually a closed tab), so
+ * it gets a report. The end is dated at the last recorded activity, not when
+ * someone happened to come back, so the report's timings stay real.
+ */
+async function expireIfOverdue(s: MockSession): Promise<MockSession> {
+  const limit = s.config.minutes * 60_000 + OVERTIME_MS;
+  if (s.endedAt || sessionClock(s) <= limit) return s;
+  const events = await getEvents(s.id);
+  const endT = Math.min(limit, Math.max(0, ...events.map((e) => e.t)));
+  await endMockSession(s, codeAt(events).code || null, endT);
+  return { ...s, endedAt: new Date(s.startedAt.getTime() + endT) };
 }
 
 export async function listMockSessions(userId: string): Promise<MockSession[]> {
@@ -120,10 +137,13 @@ export async function appendEvents(sessionId: string, events: SessionEvent[]): P
 /** Milliseconds since the session started, by the server clock. */
 export const sessionClock = (s: MockSession) => Math.max(0, Date.now() - s.startedAt.getTime());
 
-export async function endMockSession(s: MockSession, finalCode: string | null): Promise<void> {
+export async function endMockSession(s: MockSession, finalCode: string | null, atMs = sessionClock(s)): Promise<void> {
   if (s.endedAt) return;
-  await appendEvents(s.id, [{ type: "marker", t: sessionClock(s), payload: { what: "end" } }]);
-  await db.update(schema.mockSessions).set({ endedAt: new Date(), finalCode }).where(eq(schema.mockSessions.id, s.id));
+  await appendEvents(s.id, [{ type: "marker", t: atMs, payload: { what: "end" } }]);
+  await db
+    .update(schema.mockSessions)
+    .set({ endedAt: new Date(s.startedAt.getTime() + atMs), finalCode })
+    .where(and(eq(schema.mockSessions.id, s.id), isNull(schema.mockSessions.endedAt)));
 }
 
 export interface TurnInput {
@@ -168,42 +188,56 @@ export async function* runTurn(session: MockSession, input: TurnInput, signal?: 
   const scripted = scriptedTurn(state, { kind: input.kind, text: input.text, ctx, problem, config: session.config, companyName: companyName(session.config) });
   await db.update(schema.mockSessions).set({ interviewerState: scripted.state as unknown as Record<string, unknown> }).where(eq(schema.mockSessions.id, session.id));
 
-  let reply = "";
-  if (session.interviewer === "claude") {
-    try {
-      const chunks = claudeTurn(systemPrompt(problem, session.config, session.config.company ? (COMPANY_BY_ID[session.config.company] ?? null) : null), ctx.lines, turnMessage(input.kind, input.text, ctx), signal);
-      // Hold back the start of the reply until it can't be the silent marker.
-      let pending = "";
-      let decided = false;
-      for await (const chunk of chunks) {
-        reply += chunk;
-        if (decided) {
-          yield chunk;
-          continue;
+  // Everything sent to the client is recorded, even when the turn is cut off
+  // (a new turn aborts this one), so the transcript matches what was said.
+  let sent = "";
+  let finished = false;
+  try {
+    if (session.interviewer === "claude") {
+      try {
+        const chunks = claudeTurn(systemPrompt(problem, session.config, session.config.company ? (COMPANY_BY_ID[session.config.company] ?? null) : null), ctx.lines, turnMessage(input.kind, input.text, ctx), signal);
+        // Hold back the start of the reply until it can't be the silent marker.
+        let pending = "";
+        let decided = false;
+        for await (const chunk of chunks) {
+          if (decided) {
+            sent += chunk;
+            yield chunk;
+            continue;
+          }
+          pending += chunk;
+          const head = pending.trimStart();
+          if (head.length >= SILENT.length || !SILENT.startsWith(head)) {
+            decided = true;
+            if (head.startsWith(SILENT)) break;
+            sent += pending;
+            yield pending;
+          }
         }
-        pending += chunk;
-        const head = pending.trimStart();
-        if (head.length >= SILENT.length || !SILENT.startsWith(head)) {
-          decided = true;
-          if (head.startsWith(SILENT)) break;
-          yield pending;
+      } catch (e) {
+        if (signal?.aborted) return;
+        console.error("Claude interviewer turn failed", e);
+        // Fall back to the scripted reply only if nothing was said yet; never splice the two.
+        if (!sent && scripted.text !== SILENT) {
+          sent = scripted.text;
+          yield scripted.text;
         }
       }
-      if (!decided) reply = "";
-    } catch (e) {
-      if (signal?.aborted) return;
-      console.error("Claude interviewer turn failed; using the scripted reply", e);
-      reply = scripted.text;
-      if (reply !== SILENT) yield reply;
+    } else if (scripted.text !== SILENT) {
+      sent = scripted.text;
+      yield scripted.text;
     }
-  } else {
-    reply = scripted.text;
-    if (reply !== SILENT) yield reply;
+    finished = true;
+  } finally {
+    const text = sent.trim();
+    if (text && !text.startsWith(SILENT)) {
+      await appendEvents(session.id, [
+        {
+          type: "transcript",
+          t: sessionClock(session),
+          payload: { speaker: "interviewer", text, source: "interviewer", ...(finished && !signal?.aborted ? {} : { interrupted: true }) },
+        },
+      ]);
+    }
   }
-
-  reply = reply.trim();
-  if (!reply || reply.startsWith(SILENT)) return;
-  await appendEvents(session.id, [
-    { type: "transcript", t: sessionClock(session), payload: { speaker: "interviewer", text: reply, source: "interviewer" } },
-  ]);
 }

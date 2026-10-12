@@ -132,7 +132,9 @@ export function visibleChat(events: AssistedEvent[]): ChatMessage[] {
 export async function chat(session: AssistedSession, input: { text: string; model: string; files: Record<string, string> }): Promise<string> {
   const allowed = modelChoices(session.assistant).map((m) => m.id as string);
   const model = allowed.includes(input.model) ? input.model : allowed[0];
-  await appendAssistedEvents(session.id, [{ type: "prompt", t: assistedClock(session), payload: { text: input.text, model } }]);
+  // The prompt is recorded with its reply, after the call, so a failed call
+  // that the candidate retries doesn't leave an unanswered prompt behind.
+  const promptT = assistedClock(session);
 
   const [row] = await db
     .select({ s: schema.assistedSessions.assistantState })
@@ -153,7 +155,6 @@ export async function chat(session: AssistedSession, input: { text: string; mode
         pending = null;
       }
     }
-    // The prompt just recorded is the last one; it isn't part of the history.
     const plantedSoFar = events.filter((e) => e.type === "reply" && e.payload.planted).length;
     const plant = Math.random() < (plantedSoFar === 0 && history.length >= 1 ? 0.6 : 0.25);
     const res = await claudeAssistantReply({ task: session.task, model, history, prompt: input.text, files: input.files, plant });
@@ -168,7 +169,10 @@ export async function chat(session: AssistedSession, input: { text: string; mode
       .set({ assistantState: res.state as unknown as Record<string, unknown> })
       .where(eq(schema.assistedSessions.id, session.id));
   }
-  await appendAssistedEvents(session.id, [{ type: "reply", t: assistedClock(session), payload: { text, model, ...(planted ? { planted } : {}) } }]);
+  await appendAssistedEvents(session.id, [
+    { type: "prompt", t: promptT, payload: { text: input.text, model } },
+    { type: "reply", t: assistedClock(session), payload: { text, model, ...(planted ? { planted } : {}) } },
+  ]);
   return text;
 }
 

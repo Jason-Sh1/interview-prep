@@ -9,7 +9,7 @@ import { claudeEnabled } from "../interview/claude";
 import { getEvents, type MockSession } from "../mock";
 import { PROBLEM_BY_SLUG } from "../problems";
 import { applyMockFeedback, getGoals } from "../track";
-import { analyzeSession, type FeedbackReport } from "./analyze";
+import { analyzeSession, fromStart, type FeedbackReport } from "./analyze";
 import { claudeReport } from "./claude";
 import type { TrackChange } from "./track-update";
 
@@ -45,10 +45,11 @@ async function build(session: MockSession): Promise<StoredReport> {
   const problem = PROBLEM_BY_SLUG.get(session.problemSlug);
   if (!problem) throw new Error("Unknown problem");
 
-  const [events, goals] = await Promise.all([getEvents(session.id), getGoals(session.userId)]);
+  const [recorded, goals] = await Promise.all([getEvents(session.id), getGoals(session.userId)]);
   const level = goals?.level ?? "mid";
   const companyName = session.config.company ? (COMPANY_BY_ID[session.config.company]?.name ?? null) : null;
-  const durationMs = session.endedAt.getTime() - session.startedAt.getTime();
+  // Time spent on mic setup before pressing Start isn't part of the interview.
+  const { events, durationMs, offset } = fromStart(recorded, session.endedAt.getTime() - session.startedAt.getTime());
   let report = analyzeSession({ events, problem, durationMs, company: session.config.company, level }, companyName);
   if (claudeEnabled()) {
     try {
@@ -57,6 +58,8 @@ async function build(session: MockSession): Promise<StoredReport> {
       console.error("Claude feedback failed; using the rule-based report", e);
     }
   }
+
+  if (offset) report = { ...report, startOffsetMs: offset };
 
   // Insert first so the track is only changed by the request that created the report.
   const [inserted] = await db
