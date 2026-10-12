@@ -158,4 +158,33 @@ describe("debug rounds", () => {
     await rounds.saveDebugProgress(round, { run: { passed: 0, total: 4 } });
     expect((await rounds.getDebugRound(id, "u-debug"))!.runs).toHaveLength(2);
   });
+
+  it("freezes the code once the time box (plus a minute) has passed", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const rounds = await import("@/lib/comprehension");
+    await db.insert(schema.user).values({ id: "u-debug-late", name: "T", email: "debug-late@x.dev" });
+    const task = DEBUG_TASKS[0];
+    const id = await rounds.createDebugRound("u-debug-late", task.id, 30, true);
+    let round = (await rounds.getDebugRound(id, "u-debug-late"))!;
+    const partial = applyFixes(task, [task.bugs[0].id]);
+    await rounds.saveDebugProgress(round, { files: partial });
+
+    // 30 minutes plus 30 seconds in: still inside the grace minute.
+    await db.update(schema.debugRounds).set({ startedAt: new Date(Date.now() - 30.5 * 60_000) }).where(eq(schema.debugRounds.id, id));
+    round = (await rounds.getDebugRound(id, "u-debug-late"))!;
+    expect(rounds.debugTimeUp(round)).toBe(false);
+
+    await db.update(schema.debugRounds).set({ startedAt: new Date(Date.now() - 32 * 60_000) }).where(eq(schema.debugRounds.id, id));
+    round = (await rounds.getDebugRound(id, "u-debug-late"))!;
+    expect(rounds.debugTimeUp(round)).toBe(true);
+    await expect(rounds.saveDebugProgress(round, { files: applyFixes(task) })).rejects.toBeInstanceOf(rounds.DebugTimeUpError);
+    await expect(rounds.debugChat(round, "What does checkout do?", partial)).rejects.toBeInstanceOf(rounds.DebugTimeUpError);
+
+    // A late finish keeps the write-up but grades the code saved in time.
+    await rounds.finishDebugRound(round, { files: applyFixes(task), answers: {}, notes: "late notes", tests: { passed: 0, total: 0, failing: [] } });
+    round = (await rounds.getDebugRound(id, "u-debug-late"))!;
+    expect(round.endedAt).not.toBeNull();
+    for (const [f, code] of Object.entries(partial)) expect(round.files[f], f).toBe(code);
+  });
 });
