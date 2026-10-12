@@ -320,6 +320,40 @@ export const assistedEvents = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Code comprehension and debugging rounds (spec 4.5)
+
+/**
+ * One debugging round: a repo with seeded bugs, an optional assistant, and
+ * written answers at the end. Small enough to keep the chat, test runs and
+ * latest files on the row instead of a separate timeline.
+ */
+export const debugRounds = pgTable(
+  "debug_rounds",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    taskId: text("task_id").notNull(),
+    minutes: integer("minutes").notNull(),
+    /** "claude", "scripted" (the offline helper) or "none" (no assistant). */
+    assistant: text("assistant").notNull(),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    endedAt: timestamp("ended_at"),
+    /** The latest files, saved while working and at the end. */
+    files: jsonb("files").$type<Record<string, string>>(),
+    chat: jsonb("chat").$type<{ role: "user" | "assistant"; text: string; t: number }[]>().notNull().default([]),
+    runs: jsonb("runs").$type<{ t: number; passed: number; total: number }[]>().notNull().default([]),
+    answers: jsonb("answers").$type<Record<string, string>>(),
+    notes: text("notes"),
+    testResults: jsonb("test_results").$type<{ passed: number; total: number; failing: string[] }>(),
+    /** The DebugReport from src/lib/comprehension/grade.ts, once built. */
+    report: jsonb("report").$type<Record<string, unknown>>(),
+  },
+  (t) => [index("debug_rounds_user_started_idx").on(t.userId, t.startedAt)],
+);
+
+// ---------------------------------------------------------------------------
 // Company research (spec 4.6)
 
 /** One run of the research job: weekly from cron, or started by hand. */

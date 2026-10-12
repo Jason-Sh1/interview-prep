@@ -6,6 +6,7 @@ import { PHASE_INFO, type ItemKind } from "@/lib/engine/planner";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 import { listAssistedSessions } from "@/lib/assisted";
+import { listDebugRounds } from "@/lib/comprehension";
 import { listMockSessions } from "@/lib/mock";
 import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
 import { getTrackState } from "@/lib/track";
@@ -24,17 +25,19 @@ const MODE_FOR: Record<ItemKind, string> = { new: "learn", bridge: "learn", revi
 export default async function TodayPage({ searchParams }: PageProps<"/today">) {
   const { user, goals } = await requireOnboardedUser();
   const { welcome } = await searchParams;
-  const [{ plan, attempts, cards }, whatsNew, mocks, rounds] = await Promise.all([
+  const [{ plan, attempts, cards }, whatsNew, mocks, rounds, debugRounds] = await Promise.all([
     getTrackState(user.id, goals),
     getWhatsNew(goals.targetCompanies).catch(() => [] as WhatsNewItem[]),
     listMockSessions(user.id),
     listAssistedSessions(user.id),
+    listDebugRounds(user.id),
   ]);
   // A server component renders once per request, so reading the clock here is safe.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const lastMock = mocks[0]?.startedAt ?? null;
   const lastRound = rounds[0]?.startedAt ?? null;
+  const lastDebug = debugRounds[0]?.startedAt ?? null;
   // Spec 4.2: the final stretch favors mocks; suggest one if none in the last three days.
   const suggestMock = plan.phase === "final" && (!lastMock || now - lastMock.getTime() > 3 * 86_400_000);
   const phase = PHASE_INFO[plan.phase];
@@ -136,7 +139,7 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
 
       <section className="mt-10">
         <h2 className="text-sm font-medium text-muted">Other interview formats</h2>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <FormatCard
             href="/mock"
             title="Mock interview"
@@ -148,6 +151,12 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
             title="AI-assisted round"
             body="A small repo and an AI assistant, graded on how you prompt, review and own the code."
             last={lastRound}
+          />
+          <FormatCard
+            href="/debug"
+            title="Comprehension and debugging"
+            body="Read an unfamiliar repo, explain it, and find the bugs seeded in it, with or without an assistant."
+            last={lastDebug}
           />
         </div>
       </section>
