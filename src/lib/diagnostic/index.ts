@@ -3,10 +3,9 @@ import "server-only";
 // through them, and on finishing sets starting estimates for the rest of the
 // track and stores the communication baseline.
 
-import { and, asc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "../db";
 import { getReport } from "../feedback";
-import type { TrackChange } from "../feedback/track-update";
 import { createMockSession, getMockSession } from "../mock";
 import { PROBLEM_BY_SLUG, PROBLEMS } from "../problems";
 import type { PatternId } from "../problems/types";
@@ -73,14 +72,18 @@ export async function getDiagnostic(userId: string): Promise<Diagnostic | null> 
   };
 }
 
-/** Whether to steer the user to the diagnostic: they haven't finished or skipped it. */
-export async function diagnosticPending(userId: string): Promise<boolean> {
+/**
+ * Whether to steer the user to the diagnostic: "started" when it's under way,
+ * "new" when they never opened it, null once it's finished or skipped.
+ */
+export async function diagnosticPending(userId: string): Promise<"started" | "new" | null> {
   await ensureMigrated();
   const [row] = await db
     .select({ completedAt: schema.diagnostics.completedAt })
     .from(schema.diagnostics)
     .where(eq(schema.diagnostics.userId, userId));
-  return !row?.completedAt;
+  if (!row) return "new";
+  return row.completedAt ? null : "started";
 }
 
 async function solvedSlugs(userId: string): Promise<Set<string>> {
@@ -110,15 +113,27 @@ export async function startDiagnostic(userId: string, now = new Date()): Promise
 export async function startDiagnosticMock(userId: string, language: Language): Promise<string> {
   await ensureMigrated();
   const [row] = await db.select().from(schema.diagnostics).where(eq(schema.diagnostics.userId, userId));
-  if (!row) throw new Error("Start the diagnostic first");
-  if (row.mockSessionId) return row.mockSessionId;
+  if (row?.mockSessionId) return row.mockSessionId;
+  if (!row || row.completedAt) throw new Error("Start the diagnostic first");
   const id = await createMockSession(userId, {
     slug: row.mockSlug,
     language,
     config: { persona: "friendly", minutes: DIAGNOSTIC_MOCK.minutes, hintsAllowed: true, company: null },
   });
-  await db.update(schema.diagnostics).set({ mockSessionId: id }).where(eq(schema.diagnostics.userId, userId));
-  return id;
+  // Only the first of two racing clicks is kept, so the user and the diagnostic agree on the session.
+  const [won] = await db
+    .update(schema.diagnostics)
+    .set({ mockSessionId: id })
+    .where(and(eq(schema.diagnostics.userId, userId), isNull(schema.diagnostics.mockSessionId)))
+    .returning({ id: schema.diagnostics.mockSessionId });
+  if (won) return id;
+  await db.delete(schema.mockSessions).where(and(eq(schema.mockSessions.id, id), eq(schema.mockSessions.userId, userId)));
+  const [kept] = await db
+    .select({ id: schema.diagnostics.mockSessionId })
+    .from(schema.diagnostics)
+    .where(eq(schema.diagnostics.userId, userId));
+  if (!kept?.id) throw new Error("The diagnostic mock could not be started");
+  return kept.id;
 }
 
 /** Whether a mock session is this user's diagnostic mock. */
@@ -134,34 +149,36 @@ export async function isDiagnosticMock(userId: string, sessionId: string): Promi
 /**
  * Finishes the diagnostic: patterns it didn't test get a starting estimate
  * from the ones it did, and the mock's report becomes the communication
- * baseline. Problems or a mock left undone are simply not counted.
+ * baseline. The mock is optional; the three problems are not.
  */
 export async function finishDiagnostic(userId: string, now = new Date()): Promise<void> {
   const d = await getDiagnostic(userId);
-  if (!d || d.completedAt) return;
+  if (!d || d.completedAt || !d.steps.every((s) => s.attempt)) return;
   const stored = d.mock.reported && d.mock.sessionId ? await getReport(d.mock.sessionId) : null;
 
+  // Only the solo problems feed the average: a mock can only ever lower a
+  // rating, so counting it would pull every prior down after a good mock.
   const moves = d.steps.flatMap((s) => (s.attempt ? [s.attempt.after - s.attempt.before] : []));
   const tested = new Set<PatternId>(d.steps.filter((s) => s.attempt).map((s) => s.pattern));
-  if (stored) {
-    const mockPattern = PROBLEM_BY_SLUG.get(d.mock.slug)?.pattern;
-    if (mockPattern) tested.add(mockPattern);
-    const change = stored.trackChanges.find((c): c is Extract<TrackChange, { kind: "rating" }> => c.kind === "rating");
-    if (change) moves.push(change.after - change.before);
-  }
+  // The mock's pattern counts as tested only when the mock actually set its rating.
+  const mockPattern = PROBLEM_BY_SLUG.get(d.mock.slug)?.pattern;
+  if (mockPattern && stored?.trackChanges.some((c) => c.kind === "rating")) tested.add(mockPattern);
 
   const priors = untestedPriors(moves, await getSkills(userId), tested);
+  const written: typeof priors = [];
   for (const p of priors) {
     // Only where the user still has no row of their own, so nothing real is overwritten.
-    await db
+    const rows = await db
       .insert(schema.patternSkill)
       .values({ userId, pattern: p.pattern, rating: p.rating, uncertainty: p.uncertainty })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ pattern: schema.patternSkill.pattern });
+    if (rows.length) written.push(p);
   }
 
   const result: DiagnosticResult = {
     problems: d.steps.flatMap((s) => (s.attempt ? [{ slug: s.slug, pattern: s.pattern, ...s.attempt }] : [])),
-    priors: priors.map((p) => ({ pattern: p.pattern, rating: p.rating })),
+    priors: written.map((p) => ({ pattern: p.pattern, rating: p.rating })),
     communication: stored ? communicationBaseline(stored.report) : null,
   };
   await db
@@ -176,5 +193,10 @@ export async function skipDiagnostic(userId: string, now = new Date()): Promise<
   await db
     .insert(schema.diagnostics)
     .values({ userId, problems: [], mockSlug: "", completedAt: now, skipped: true })
-    .onConflictDoUpdate({ target: schema.diagnostics.userId, set: { completedAt: now, skipped: true } });
+    .onConflictDoUpdate({
+      target: schema.diagnostics.userId,
+      set: { completedAt: now, skipped: true },
+      // A stale tab can't turn a finished diagnostic into a skipped one.
+      setWhere: isNull(schema.diagnostics.completedAt),
+    });
 }

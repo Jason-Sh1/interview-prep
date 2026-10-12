@@ -73,9 +73,10 @@ describe("diagnostic flow", () => {
     const userId = "u-diag";
     await db.insert(schema.user).values({ id: userId, name: "T", email: "diag@x.dev" });
 
-    expect(await diag.diagnosticPending(userId)).toBe(true);
+    expect(await diag.diagnosticPending(userId)).toBe("new");
     expect(await diag.getDiagnostic(userId)).toBeNull();
     await diag.startDiagnostic(userId);
+    expect(await diag.diagnosticPending(userId)).toBe("started");
     let d = (await diag.getDiagnostic(userId))!;
     expect(d.steps).toHaveLength(3);
     expect(d.steps.every((s) => !s.attempt)).toBe(true);
@@ -86,7 +87,12 @@ describe("diagnostic flow", () => {
     const [session] = await db.select().from(schema.mockSessions).where((await import("drizzle-orm")).eq(schema.mockSessions.id, mockId));
     expect((session.config as { minutes: number }).minutes).toBe(15);
 
-    for (const s of d.steps) await track.recordAttempt(userId, attempt(s.slug, true));
+    // Finishing needs all three problems.
+    await track.recordAttempt(userId, attempt(d.steps[0].slug, true));
+    await diag.finishDiagnostic(userId);
+    expect((await diag.getDiagnostic(userId))!.completedAt).toBeNull();
+
+    for (const s of d.steps.slice(1)) await track.recordAttempt(userId, attempt(s.slug, true));
     d = (await diag.getDiagnostic(userId))!;
     expect(d.steps.every((s) => s.attempt?.solved)).toBe(true);
     expect(d.mock).toMatchObject({ ended: false, reported: false });
@@ -102,12 +108,48 @@ describe("diagnostic flow", () => {
     expect(skills.graphs!.attempts).toBe(0);
     expect(skills["arrays-hashing"]!.attempts).toBe(1);
     expect(d.result!.priors.every((p) => !d.steps.some((s) => s.pattern === p.pattern))).toBe(true);
-    expect(await diag.diagnosticPending(userId)).toBe(false);
+    expect(await diag.diagnosticPending(userId)).toBeNull();
 
-    // Finishing again is a no-op; starting again doesn't reset a finished one.
+    // Finishing again is a no-op; starting again or a stale "skip" doesn't reset a finished one.
     await diag.finishDiagnostic(userId);
     await diag.startDiagnostic(userId);
-    expect((await diag.getDiagnostic(userId))!.completedAt).toEqual(d.completedAt);
+    await diag.skipDiagnostic(userId);
+    const again = (await diag.getDiagnostic(userId))!;
+    expect(again.completedAt).toEqual(d.completedAt);
+    expect(again.skipped).toBe(false);
+    await expect(diag.startDiagnosticMock(userId, "python")).resolves.toBe(mockId);
+  });
+
+  it("keeps one mock session when the start is clicked twice at once", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const diag = await import("@/lib/diagnostic");
+    const userId = "u-diag-race";
+    await db.insert(schema.user).values({ id: userId, name: "T", email: "diag-race@x.dev" });
+    await diag.startDiagnostic(userId);
+    const [a, b] = await Promise.all([diag.startDiagnosticMock(userId, "python"), diag.startDiagnosticMock(userId, "python")]);
+    expect(a).toBe(b);
+    expect(await diag.isDiagnosticMock(userId, a)).toBe(true);
+    const sessions = await db.select().from(schema.mockSessions).where(eq(schema.mockSessions.userId, userId));
+    expect(sessions.map((s) => s.id)).toEqual([a]);
+  });
+
+  it("lists only the starting estimates it actually wrote", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const diag = await import("@/lib/diagnostic");
+    const track = await import("@/lib/track");
+    const userId = "u-diag-priors";
+    await db.insert(schema.user).values({ id: userId, name: "T", email: "diag-priors@x.dev" });
+    // A row with no attempts, as an earlier mock's feedback leaves behind.
+    await db.insert(schema.patternSkill).values({ userId, pattern: "graphs", rating: 940, uncertainty: 300 });
+    await diag.startDiagnostic(userId);
+    const d = (await diag.getDiagnostic(userId))!;
+    for (const s of d.steps) await track.recordAttempt(userId, attempt(s.slug, true));
+    await diag.finishDiagnostic(userId);
+    const { result } = (await diag.getDiagnostic(userId))!;
+    expect(result!.priors.length).toBeGreaterThan(0);
+    expect(result!.priors.map((p) => p.pattern)).not.toContain("graphs");
+    expect((await track.getSkills(userId)).graphs!.rating).toBe(940);
   });
 
   it("skips, then restarts fresh", async () => {
@@ -116,13 +158,13 @@ describe("diagnostic flow", () => {
     const userId = "u-diag-skip";
     await db.insert(schema.user).values({ id: userId, name: "T", email: "diag-skip@x.dev" });
     await diag.skipDiagnostic(userId);
-    expect(await diag.diagnosticPending(userId)).toBe(false);
+    expect(await diag.diagnosticPending(userId)).toBeNull();
     expect((await diag.getDiagnostic(userId))!.skipped).toBe(true);
     await diag.startDiagnostic(userId);
     const d = (await diag.getDiagnostic(userId))!;
     expect(d.skipped).toBe(false);
     expect(d.completedAt).toBeNull();
     expect(d.steps).toHaveLength(3);
-    expect(await diag.diagnosticPending(userId)).toBe(true);
+    expect(await diag.diagnosticPending(userId)).toBe("started");
   });
 });

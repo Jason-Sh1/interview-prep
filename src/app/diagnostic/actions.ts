@@ -24,5 +24,5 @@ export async function finishDiagnosticAction() {
 export async function skipDiagnosticAction() {
   const { user } = await requireOnboardedUser();
   await skipDiagnostic(user.id);
-  redirect("/today");
+  redirect("/today?welcome=1");
 }

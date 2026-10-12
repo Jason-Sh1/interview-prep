@@ -57,16 +57,16 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
           Your plan is ready. It re-plans after every attempt, so just work down the list.
         </div>
       )}
-      {/* Only early on: once there's real history the track has already calibrated itself. */}
-      {diagnosticOpen && attempts.length < 6 && (
+      {/* Always while it's under way; if never opened, only early on, since real history calibrates the track anyway. */}
+      {(diagnosticOpen === "started" || (diagnosticOpen === "new" && attempts.length < 6)) && (
         <Link href="/diagnostic" className="card mb-6 flex items-center gap-4 border-accent bg-accent-soft p-4 transition-colors hover:border-accent">
           <div className="flex-1">
-            <div className="font-medium">Find your starting point</div>
+            <div className="font-medium">{diagnosticOpen === "started" ? "Finish your diagnostic" : "Find your starting point"}</div>
             <p className="mt-1 text-sm text-muted">
               Three short problems and a quick voice mock, so the plan starts at your level instead of the beginning.
             </p>
           </div>
-          <span className="btn-primary shrink-0">Diagnostic</span>
+          <span className="btn-primary shrink-0">{diagnosticOpen === "started" ? "Continue" : "Diagnostic"}</span>
         </Link>
       )}
       <div className="flex flex-wrap items-end justify-between gap-3">
