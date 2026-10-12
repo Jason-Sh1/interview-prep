@@ -14,6 +14,7 @@ export async function Nav() {
           <>
             <Link href="/today" className="btn-ghost">Today</Link>
             <Link href="/problems" className="btn-ghost">Problems</Link>
+            <Link href="/mock" className="btn-ghost">Mock interview</Link>
             <Link href="/progress" className="btn-ghost">Skill map</Link>
             <Link href="/onboarding" className="btn-ghost">Goals</Link>
           </>
