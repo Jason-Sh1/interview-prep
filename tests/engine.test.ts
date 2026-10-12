@@ -167,3 +167,57 @@ describe("planner", () => {
     expect(plan.items.some((i) => i.slug === p.slug)).toBe(false);
   });
 });
+
+describe("review fixes", () => {
+  const ah = PROBLEMS.filter((p) => p.pattern === "arrays-hashing").sort((a, b) => a.rating - b.rating);
+  const at = (slug: string, solved: boolean, daysAgo: number) => ({
+    problemSlug: slug,
+    pattern: "arrays-hashing" as const,
+    solved,
+    mode: "learn" as const,
+    finishedAt: new Date(NOW.getTime() - daysAgo * DAY),
+  });
+
+  it("bridges below the current run of misses, not an old one", () => {
+    const [easiest, , , hardest] = ah;
+    const skills: SkillMap = { "arrays-hashing": { rating: 1100, uncertainty: 200, attempts: 4, solved: 1, failStreak: 2 } };
+    const attempts = [at(easiest.slug, false, 6), at(easiest.slug, true, 5), at(hardest.slug, false, 2), at(hardest.slug, false, 1)];
+    const plan = buildPlan(input({ skills, attempts }));
+    const bridge = plan.items.find((i) => i.kind === "bridge");
+    expect(bridge).toBeDefined();
+    const r = PROBLEM_BY_SLUG.get(bridge!.slug)!.rating;
+    expect(r).toBeLessThan(hardest.rating);
+  });
+
+  it("stops offering problems once today's budget is spent", () => {
+    const done = { ...at(ah[1].slug, true, 0), finishedAt: new Date(NOW.getTime() - 3600_000) };
+    const plan = buildPlan(input({ goals: { targetCompanies: [], interviewDate: null, hoursPerWeek: 3 }, attempts: [done] }));
+    expect(plan.items).toEqual([]);
+    expect(plan.doneToday).toEqual([ah[1].slug]);
+    // With nothing done yet, one item is offered even if it runs over.
+    expect(buildPlan(input({ goals: { targetCompanies: [], interviewDate: null, hoursPerWeek: 1 } })).items.length).toBe(1);
+  });
+
+  it("keeps a started pattern open through a small dip in a prerequisite", () => {
+    const pre = { rating: 1030, uncertainty: 100, attempts: 5, solved: 3, failStreak: 1 };
+    const skills: SkillMap = { graphs: pre, heap: pre };
+    expect(isUnlocked("advanced-graphs", skills)).toBe(false);
+    skills["advanced-graphs"] = { rating: 1000, uncertainty: 250, attempts: 1, solved: 1, failStreak: 0 };
+    expect(isUnlocked("advanced-graphs", skills)).toBe(true);
+    skills.heap = { ...pre, rating: 980 };
+    expect(isUnlocked("advanced-graphs", skills)).toBe(false);
+  });
+
+  it("counts the day in the user's time zone", () => {
+    // 6pm in Los Angeles is already tomorrow in UTC.
+    const now = new Date("2026-10-12T01:00:00Z");
+    const solvedAt = new Date("2026-10-11T20:00:00Z"); // 1pm the same LA day
+    const attempts = [{ ...at(ah[0].slug, true, 0), finishedAt: solvedAt }];
+    const la = buildPlan(input({ now, attempts, goals: { targetCompanies: [], interviewDate: "2026-10-12", hoursPerWeek: 10, timeZone: "America/Los_Angeles" } }));
+    expect(la.doneToday).toEqual([ah[0].slug]);
+    expect(la.daysLeft).toBe(2);
+    const utc = buildPlan(input({ now, attempts, goals: { targetCompanies: [], interviewDate: "2026-10-12", hoursPerWeek: 10, timeZone: "UTC" } }));
+    expect(utc.doneToday).toEqual([]);
+    expect(utc.daysLeft).toBe(1);
+  });
+});

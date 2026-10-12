@@ -53,6 +53,12 @@ function storageGet(key: string): string | null {
     return null;
   }
 }
+function storageRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
 function storageSet(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
@@ -86,8 +92,9 @@ export function Workspace(props: Props) {
   const finished = stage === "done";
   const showPattern = mode !== "mixed" || finished;
 
-  // Restore saved drafts and the last language for this problem.
-  const draftKey = (l: Language) => `draft:${problem.slug}:${l}`;
+  // Restore saved drafts and the last language for this problem. Reviews and
+  // mixed practice keep their own drafts, so they never open on old code.
+  const draftKey = (l: Language, m: WorkspaceMode = mode) => (m === "learn" ? `draft:${problem.slug}:${l}` : `draft:${m}:${problem.slug}:${l}`);
   useEffect(() => {
     const restored = { ...props.starters };
     for (const l of LANGUAGES) {
@@ -182,9 +189,12 @@ export function Workspace(props: Props) {
           confidence: opts.confidence,
           complexityChoice: opts.complexity,
           code: opts.explained ? null : code,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         setSaved(res);
         setStage("done");
+        // A solved problem's drafts would hand the next review the answer.
+        if (opts.solved) for (const m of ["learn", "review", "mixed"] as const) for (const l of LANGUAGES) storageRemove(draftKey(l.id, m));
       } catch (e) {
         setSaveError(e instanceof Error ? e.message : "Could not save");
       }

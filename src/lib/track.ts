@@ -22,6 +22,7 @@ export interface Goals {
   interviewDate: string | null;
   hoursPerWeek: number;
   language: Language;
+  timeZone: string | null;
 }
 
 export async function getGoals(userId: string): Promise<Goals | null> {
@@ -34,6 +35,7 @@ export async function getGoals(userId: string): Promise<Goals | null> {
     interviewDate: g.interviewDate,
     hoursPerWeek: g.hoursPerWeek,
     language: g.language as Language,
+    timeZone: g.timeZone,
   };
 }
 

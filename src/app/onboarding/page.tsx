@@ -2,11 +2,12 @@ import { requireUser } from "@/lib/auth/session";
 import { COMPANIES } from "@/lib/engine/companies";
 import { getGoals } from "@/lib/track";
 import { saveGoalsAction } from "../actions";
+import { TimeZoneInput } from "./TimeZoneInput";
 
 export default async function OnboardingPage() {
   const user = await requireUser();
   const goals = await getGoals(user.id);
-  const g = goals ?? { targetCompanies: [], level: "mid", interviewDate: null, hoursPerWeek: 7, language: "python" };
+  const g = goals ?? { targetCompanies: [] as string[], level: "mid", interviewDate: null, hoursPerWeek: 7, language: "python", timeZone: null };
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <h1 className="text-2xl font-semibold">{goals ? "Your goals" : "Set up your track"}</h1>
@@ -14,6 +15,7 @@ export default async function OnboardingPage() {
         These shape which patterns come first, how many problems you get each day, and when the plan shifts into its final stretch.
       </p>
       <form action={saveGoalsAction} className="mt-8 space-y-7">
+        <TimeZoneInput />
         <fieldset>
           <legend className="label">Target companies</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

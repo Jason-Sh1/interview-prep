@@ -14,6 +14,8 @@ export type SkillMap = Partial<Record<PatternId, PatternSkill>>;
 
 /** Rating a prerequisite needs before the patterns that depend on it unlock. */
 export const UNLOCK_RATING = 1050;
+/** Once a pattern has been started, it only locks again if a prerequisite falls below this, so one miss doesn't hide it. */
+export const RELOCK_RATING = 1000;
 /** Rating (with at least two solves) at which a pattern counts as learned and joins mixed practice. */
 export const LEARNED_RATING = 1150;
 /** How far above the pattern rating a problem may be and still be offered. */
@@ -32,7 +34,8 @@ export function skillOf(skills: SkillMap, p: PatternId): PatternSkill {
 }
 
 export function isUnlocked(p: PatternId, skills: SkillMap): boolean {
-  return PATTERN_BY_ID[p].prerequisites.every((pre) => skillOf(skills, pre).rating >= UNLOCK_RATING);
+  const bar = skillOf(skills, p).attempts > 0 ? RELOCK_RATING : UNLOCK_RATING;
+  return PATTERN_BY_ID[p].prerequisites.every((pre) => skillOf(skills, pre).rating >= bar);
 }
 
 export function isLearned(p: PatternId, skills: SkillMap): boolean {
