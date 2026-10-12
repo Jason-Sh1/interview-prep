@@ -72,6 +72,8 @@ export const eventSchema = z.discriminatedUnion("type", [
       source: z.enum(["browser-stt", "typed", "livekit-stt", "interviewer"]),
       /** When the utterance started, if known (end is `t`). */
       startT: z.number().int().nonnegative().optional(),
+      /** The interviewer was cut off (the candidate ran tests or spoke) before finishing. */
+      interrupted: z.boolean().optional(),
     }),
   }),
   z.object({
