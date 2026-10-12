@@ -14,6 +14,7 @@ export async function Nav() {
     { href: "/problems", label: "Problems" },
     { href: "/mock", label: "Mock interview" },
     { href: "/assisted", label: "AI-assisted" },
+    { href: "/debug", label: "Debugging" },
     { href: "/progress", label: "Skill map" },
     { href: "/onboarding", label: "Goals" },
     ...(admin ? [{ href: "/research", label: "Research", badge: pending || undefined }] : []),
