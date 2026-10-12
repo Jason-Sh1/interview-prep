@@ -184,7 +184,7 @@ function Result({ result }: { result: DiagnosticResult }) {
         </p>
       )}
 
-      <Link href="/today" className="btn-primary mt-8 inline-block">
+      <Link href="/today?welcome=1" className="btn-primary mt-8 inline-block">
         See today&apos;s plan
       </Link>
     </>

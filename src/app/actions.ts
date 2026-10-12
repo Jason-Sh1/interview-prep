@@ -36,7 +36,10 @@ export async function saveGoalsAction(form: FormData) {
     language: form.get("language"),
     timeZone: form.get("timeZone") || null,
   });
-  const firstTime = !(await getGoals(user.id));
+  const existing = await getGoals(user.id);
+  const firstTime = !existing;
+  // The zone field fills in after hydration; an early submit shouldn't wipe a known zone.
+  if (!parsed.timeZone && existing?.timeZone) parsed.timeZone = existing.timeZone;
   await saveGoals(user.id, parsed);
 
   // Seed ratings from problems already solved elsewhere, so the track doesn't start from zero.
