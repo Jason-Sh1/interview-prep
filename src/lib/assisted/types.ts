@@ -63,7 +63,11 @@ export const ASSISTANT_MODELS = [
 export const SCRIPTED_MODEL = { id: "practice", label: "Practice assistant (offline)" } as const;
 export type AssistantModelId = (typeof ASSISTANT_MODELS)[number]["id"] | typeof SCRIPTED_MODEL.id;
 
-const filesSchema = z.record(z.string().max(200), z.string().max(100_000));
+/** A round's repo: a handful of small files. The caps keep a crafted request from storing (or sending to Claude) megabytes. */
+const filesSchema = z
+  .record(z.string().max(200), z.string().max(100_000))
+  .refine((f) => Object.keys(f).length <= 50, "Too many files")
+  .refine((f) => Object.values(f).reduce((n, s) => n + s.length, 0) <= 400_000, "The files are too large");
 
 /**
  * Timeline events. `t` is milliseconds since the session started.

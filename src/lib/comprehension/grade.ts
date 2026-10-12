@@ -29,8 +29,11 @@ export interface DebugGradeInput {
   answers: Record<string, string>;
   /** The candidate's write-up of the bugs they found. */
   notes: string;
-  /** Visible and hidden tests run on the final code. */
-  tests: { passed: number; total: number; failing: string[] };
+  /**
+   * Visible and hidden tests run on the final code. `passing` names the tests
+   * that ran and passed; rounds saved before it existed only have `failing`.
+   */
+  tests: { passed: number; total: number; failing: string[]; passing?: string[] };
   runs: RunRecord[];
   prompts: number;
   withAssistant: boolean;
@@ -130,12 +133,15 @@ const DRILLS: Record<DebugKey, { title: string; drill: string }> = {
 export function gradeDebugRound(input: DebugGradeInput): DebugReport {
   const { task } = input;
   const failing = new Set(input.tests.failing);
+  const passing = input.tests.passing ? new Set(input.tests.passing) : null;
+  // A test that never ran (a syntax error, a crash on load, a timeout) proves nothing was fixed.
+  const passed = (t: string) => input.tests.total > 0 && (passing ? passing.has(t) : !failing.has(t));
   const owned = new Set(task.bugs.flatMap((b) => b.tests));
   const bugs: BugResult[] = task.bugs.map((b) => ({
     id: b.id,
     file: b.file,
     description: b.description,
-    fixed: b.tests.every((t) => !failing.has(t)),
+    fixed: b.tests.every(passed),
     explained: coverage(input.notes, b.keywords) === 1,
   }));
   const regressions = input.tests.failing.filter((n) => !owned.has(n));

@@ -105,7 +105,7 @@ export async function debugChat(round: DebugRound, text: string, files: Record<s
 
 export async function finishDebugRound(
   round: DebugRound,
-  input: { files: Record<string, string>; answers: Record<string, string>; notes: string; tests: { passed: number; total: number; failing: string[] } },
+  input: { files: Record<string, string>; answers: Record<string, string>; notes: string; tests: { passed: number; total: number; failing: string[]; passing?: string[] } },
 ): Promise<void> {
   await db
     .update(schema.debugRounds)

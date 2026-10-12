@@ -366,7 +366,7 @@ export const debugRounds = pgTable(
     runs: jsonb("runs").$type<{ t: number; passed: number; total: number }[]>().notNull().default([]),
     answers: jsonb("answers").$type<Record<string, string>>(),
     notes: text("notes"),
-    testResults: jsonb("test_results").$type<{ passed: number; total: number; failing: string[] }>(),
+    testResults: jsonb("test_results").$type<{ passed: number; total: number; failing: string[]; passing?: string[] }>(),
     /** The DebugReport from src/lib/comprehension/grade.ts, once built. */
     report: jsonb("report").$type<Record<string, unknown>>(),
   },
