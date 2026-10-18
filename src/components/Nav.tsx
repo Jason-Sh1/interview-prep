@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isSingleUser } from "@/lib/auth/mode";
 import { getCurrentUser } from "@/lib/auth/session";
 import { pendingCount } from "@/lib/research";
 import { isAdmin } from "@/lib/research/admin";
@@ -40,7 +41,7 @@ export async function Nav() {
           </>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
-          {user ? (
+          {user && isSingleUser() ? null : user ? (
             <>
               <span className="hidden text-sm text-muted sm:inline">{user.name}</span>
               <SignOutButton />

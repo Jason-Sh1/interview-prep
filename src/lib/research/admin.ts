@@ -1,13 +1,16 @@
 import "server-only";
 import { notFound } from "next/navigation";
+import { isSingleUser } from "../auth/mode";
 import { requireUser, type CurrentUser } from "../auth/session";
 
 // Who may review research: the emails in ADMIN_EMAILS (comma-separated),
 // signed in with a provider that verified the address (GitHub), since anyone
 // can register an unverified email. With it unset, anyone signed in during
-// local development, and nobody in production.
+// local development, and nobody in production. In single-user mode the one
+// local user is the reviewer.
 
 export function isAdmin(user: Pick<CurrentUser, "email" | "emailVerified">): boolean {
+  if (isSingleUser()) return true;
   const list = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
