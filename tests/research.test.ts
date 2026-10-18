@@ -211,11 +211,27 @@ describe("research reviewers", () => {
   it("requires a verified email on the admin list", async () => {
     const { isAdmin } = await import("@/lib/research/admin");
     const prev = process.env.ADMIN_EMAILS;
+    const prevMode = process.env.AUTH_MODE;
     process.env.ADMIN_EMAILS = "jason@example.com, other@example.com";
+    process.env.AUTH_MODE = "accounts";
     try {
       expect(isAdmin({ email: "Jason@example.com", emailVerified: true })).toBe(true);
       expect(isAdmin({ email: "jason@example.com", emailVerified: false })).toBe(false);
       expect(isAdmin({ email: "someone@example.com", emailVerified: true })).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.ADMIN_EMAILS;
+      else process.env.ADMIN_EMAILS = prev;
+      if (prevMode === undefined) delete process.env.AUTH_MODE;
+      else process.env.AUTH_MODE = prevMode;
+    }
+  });
+
+  it("makes the local user the reviewer in single-user mode", async () => {
+    const { isAdmin } = await import("@/lib/research/admin");
+    const prev = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = "jason@example.com";
+    try {
+      expect(isAdmin({ email: "me@localhost", emailVerified: false })).toBe(true);
     } finally {
       if (prev === undefined) delete process.env.ADMIN_EMAILS;
       else process.env.ADMIN_EMAILS = prev;

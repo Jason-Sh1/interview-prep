@@ -11,7 +11,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 ## Status
 
-Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
+Phase 1, the practice core, is built: onboarding, a 55-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
 
 Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
 
@@ -28,7 +28,7 @@ npm run dev          # open http://localhost:3000
 
 Stop it with Ctrl+C. Next time, just `cd interview-prep` and `npm run dev`; after pulling new changes (`git pull`), run `npm install` again first.
 
-No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data` (delete that folder to start over), code runs in your browser, and mock interviews use your browser's voice with a scripted interviewer.
+No other setup is needed, and there's no account to create: it runs as a single-user app, so opening it takes you straight to your plan (if you made an account before, it keeps using that one and its progress). With no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data` (delete that folder to start over), code runs in your browser, and mock interviews use your browser's voice with a scripted interviewer.
 
 **Optional keys.** To turn on the real features, copy the example settings and fill in what you want, then restart `npm run dev`:
 
@@ -36,16 +36,15 @@ No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgr
 cp .env.example .env.local
 ```
 
-The one worth adding first is `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com)): it makes Claude the mock interviewer, the feedback grader, the AI-assisted round assistant and the research job. Everything else in [.env.example](.env.example) (Postgres, GitHub sign-in, Judge0, LiveKit voice) can stay empty. `.env.local` is ignored by Git, so keys never get committed.
+The one worth adding first is `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com)): it makes Claude the mock interviewer, the feedback grader, the AI-assisted round assistant and the research job. Everything else in [.env.example](.env.example) (Postgres, Judge0, LiveKit voice, sign-in for hosted use) can stay empty. `.env.local` is ignored by Git, so keys never get committed.
 
 ### Using it day to day
 
-1. **Sign up** with an email and password (it's stored only in your local database).
-2. **Goals**: set your target companies, interview date, level, language and hours per week. You can also paste LeetCode problems you've already solved so they count.
-3. **Diagnostic**: three short problems and a 15-minute mock, so the plan starts at your real level instead of guessing.
-4. **Today** is your daily plan. Work through it top to bottom: new problems, FSRS reviews that are due, drills from past feedback. It re-plans after every attempt, so missing a day is fine.
-5. A few times a week, do a **Mock interview** (use headphones, Chrome or Edge for voice), and read the feedback report afterwards; its weak spots come back in your plan.
-6. As your interview gets closer, add **AI-assisted** and **Debugging** rounds, and check the **Skill map** to see which patterns are weak.
+1. **Goals**: set your target companies, interview date, level, language and hours per week. You can also paste LeetCode problems you've already solved so they count.
+2. **Diagnostic**: three short problems and a 15-minute mock, so the plan starts at your real level instead of guessing.
+3. **Today** is your daily plan. Work through it top to bottom: new problems, FSRS reviews that are due, drills from past feedback. It re-plans after every attempt, so missing a day is fine.
+4. A few times a week, do a **Mock interview** (use headphones, Chrome or Edge for voice), and read the feedback report afterwards; its weak spots come back in your plan.
+5. As your interview gets closer, add **AI-assisted** and **Debugging** rounds, and check the **Skill map** to see which patterns are weak.
 
 ### Deploying it
 
@@ -54,6 +53,8 @@ To use it from any device, deploy to [Vercel](https://vercel.com) (free tier wor
 - `DATABASE_URL`: a hosted Postgres such as [Neon](https://neon.tech) or [Supabase](https://supabase.com). Required, because the embedded database can't persist on Vercel. Tables are created automatically on startup.
 - `BETTER_AUTH_SECRET` (generate with `openssl rand -base64 32`) and `BETTER_AUTH_URL` (your site's address, e.g. `https://your-app.vercel.app`).
 - `CRON_SECRET` for the weekly research job in `vercel.json`, and `ADMIN_EMAILS` plus GitHub sign-in if you want to review research in production.
+
+A deployed site is on the internet, so on Vercel the app turns accounts back on: you sign up once with an email and password, and nobody else can use your API keys. On other hosts, set `AUTH_MODE=accounts` yourself. `AUTH_MODE=single` forces single-user mode anywhere, which leaves the site open to anyone with the address.
 - `ANTHROPIC_API_KEY` and any other optional keys from `.env.example`.
 
 Every push to `main` then redeploys automatically. The LiveKit voice agent in `agent/` is a separate long-running process and can't run on Vercel; without it, mocks use browser voice.
@@ -72,7 +73,7 @@ npm run typecheck
 | Piece | Where | Notes |
 |---|---|---|
 | App | Next.js 16 (App Router), React 19, Tailwind 4 | Pages in `src/app` |
-| Sign-in | [Better Auth](https://better-auth.com) (email + password, optional GitHub) | `src/lib/auth` |
+| Sign-in | None by default (`AUTH_MODE=single`, one built-in user). With `AUTH_MODE=accounts`, [Better Auth](https://better-auth.com) (email + password, optional GitHub) | `src/lib/auth`; the mode is in `auth/mode.ts` |
 | Database | Drizzle ORM on Postgres, or PGlite locally | Schema in `src/lib/db/schema.ts`, migrations in `drizzle/` (applied on startup) |
 | Problems | TypeScript content files, one per pattern | `src/lib/problems/bank`; statements are original paraphrases that link to the public problem they're modeled on |
 | Editor | Monaco, served from `public/vendor` | `src/app/problems/[slug]/Workspace.tsx` |
@@ -147,7 +148,7 @@ Modeled on the AI-enabled rounds companies such as Meta and Shopify now run: you
 Company profiles (each company's pattern mix, loop, and AI tool policy) are versioned in `company_profiles`. Version 1 of each is the hand estimate in `engine/companies.ts`.
 
 - **Research runs** (`research/claude.ts`, needs `ANTHROPIC_API_KEY`): for each company, Claude (`claude-opus-5-5`, override with `RESEARCH_MODEL`) searches the web for reports from the last 12 months and writes notes with sources. A second call turns the notes into a structured profile. Any source that wasn't actually returned by a search is dropped, and a profile with no verified source is discarded.
-- **Review queue** (`/research`): a profile that changes something (an AI policy, a pattern weight moving by 0.15 or more, a new loop description or note) waits there as a pending version, showing what changed, a before/after view and its sources. Approving it updates every user's plan and the skill map. A profile that still holds just gets its "last verified" date and sources refreshed. Reviewers are the emails in `ADMIN_EMAILS`, signed in with GitHub so the address is verified (email and password accounts aren't); with that unset, anyone signed in can review in development, and nobody can in production.
+- **Review queue** (`/research`): a profile that changes something (an AI policy, a pattern weight moving by 0.15 or more, a new loop description or note) waits there as a pending version, showing what changed, a before/after view and its sources. Approving it updates every user's plan and the skill map. A profile that still holds just gets its "last verified" date and sources refreshed. In single-user mode, you are the reviewer. With accounts, reviewers are the emails in `ADMIN_EMAILS`, signed in with GitHub so the address is verified (email and password accounts aren't); with that unset, anyone signed in can review in development, and nobody can in production.
 - **Schedule**: `vercel.json` calls `/api/cron/research` every Monday, authorized by `CRON_SECRET`. Any scheduler can call it the same way, with `Authorization: Bearer $CRON_SECRET`. Run it by hand from `/research` or with `npm run research [company-id ...]`.
 - **What users see**: a "What's new in interviews" panel on Today for approved changes from the last 45 days (target companies first), and "verified" dates with sources on the skill map.
 
