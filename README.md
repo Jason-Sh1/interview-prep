@@ -15,16 +15,50 @@ Phase 1, the practice core, is built: sign-in, onboarding, a 55-problem bank ove
 
 Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
 
-## Running it
+## Running it on your computer
 
-Requires Node 20+.
+You need two free tools installed once: [Git](https://git-scm.com/downloads) and [Node.js](https://nodejs.org) 20 or newer (the LTS download is fine). Check them with `git --version` and `node -v`. Python is not needed; Python solutions run in the browser.
 
 ```bash
+git clone https://github.com/Jason-Sh1/interview-prep.git
+cd interview-prep
 npm install          # also copies Monaco and Pyodide into public/vendor
-npm run dev          # http://localhost:3000
+npm run dev          # open http://localhost:3000
 ```
 
-No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data`, code runs in your browser, and mock interviews use your browser's voice with a scripted interviewer. See [.env.example](.env.example) for the optional settings (Postgres, GitHub sign-in, Judge0, Claude, LiveKit). Production needs `BETTER_AUTH_SECRET`.
+Stop it with Ctrl+C. Next time, just `cd interview-prep` and `npm run dev`; after pulling new changes (`git pull`), run `npm install` again first.
+
+No other setup is needed: with no `DATABASE_URL` the app uses an embedded Postgres (PGlite) stored in `./.data` (delete that folder to start over), code runs in your browser, and mock interviews use your browser's voice with a scripted interviewer.
+
+**Optional keys.** To turn on the real features, copy the example settings and fill in what you want, then restart `npm run dev`:
+
+```bash
+cp .env.example .env.local
+```
+
+The one worth adding first is `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com)): it makes Claude the mock interviewer, the feedback grader, the AI-assisted round assistant and the research job. Everything else in [.env.example](.env.example) (Postgres, GitHub sign-in, Judge0, LiveKit voice) can stay empty. `.env.local` is ignored by Git, so keys never get committed.
+
+### Using it day to day
+
+1. **Sign up** with an email and password (it's stored only in your local database).
+2. **Goals**: set your target companies, interview date, level, language and hours per week. You can also paste LeetCode problems you've already solved so they count.
+3. **Diagnostic**: three short problems and a 15-minute mock, so the plan starts at your real level instead of guessing.
+4. **Today** is your daily plan. Work through it top to bottom: new problems, FSRS reviews that are due, drills from past feedback. It re-plans after every attempt, so missing a day is fine.
+5. A few times a week, do a **Mock interview** (use headphones, Chrome or Edge for voice), and read the feedback report afterwards; its weak spots come back in your plan.
+6. As your interview gets closer, add **AI-assisted** and **Debugging** rounds, and check the **Skill map** to see which patterns are weak.
+
+### Deploying it
+
+To use it from any device, deploy to [Vercel](https://vercel.com) (free tier works): import the GitHub repo, and set these environment variables in the project settings before the first deploy:
+
+- `DATABASE_URL`: a hosted Postgres such as [Neon](https://neon.tech) or [Supabase](https://supabase.com). Required, because the embedded database can't persist on Vercel. Tables are created automatically on startup.
+- `BETTER_AUTH_SECRET` (generate with `openssl rand -base64 32`) and `BETTER_AUTH_URL` (your site's address, e.g. `https://your-app.vercel.app`).
+- `CRON_SECRET` for the weekly research job in `vercel.json`, and `ADMIN_EMAILS` plus GitHub sign-in if you want to review research in production.
+- `ANTHROPIC_API_KEY` and any other optional keys from `.env.example`.
+
+Every push to `main` then redeploys automatically. The LiveKit voice agent in `agent/` is a separate long-running process and can't run on Vercel; without it, mocks use browser voice.
+
+### Development checks
 
 ```bash
 npm test             # engine and test-runner unit tests, plus every reference solution
