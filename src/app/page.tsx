@@ -42,6 +42,10 @@ export default async function Home() {
       title: "System design on a whiteboard",
       body: "Design a real system on a shared whiteboard while an interviewer who can see your diagram drives requirements, estimates, deep dives and trade-offs.",
     },
+    {
+      title: "Behavioral rounds and a story bank",
+      body: "Turn your resume into STAR stories, see which company principles they cover, then answer questions from an interviewer who probes for what you did and what came of it.",
+    },
   ];
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-16">
