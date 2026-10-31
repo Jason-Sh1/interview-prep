@@ -22,6 +22,7 @@ import {
   type TurnKind,
   type VoiceMode,
 } from "./interview/types";
+import { ConsentRequiredError, hasRecordingConsent } from "./privacy";
 import { PROBLEM_BY_SLUG } from "./problems";
 import type { Problem } from "./problems/types";
 import { starterCode, type Language } from "./runner/drivers";
@@ -37,6 +38,8 @@ export interface MockSession {
   startedAt: Date;
   endedAt: Date | null;
   finalCode: string | null;
+  /** Set when the retention limit deleted the recording. */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.mockSessions.$inferSelect;
@@ -53,6 +56,7 @@ function fromRow(r: Row): MockSession {
     startedAt: r.startedAt,
     endedAt: r.endedAt,
     finalCode: r.finalCode,
+    purgedAt: r.purgedAt,
   };
 }
 
@@ -63,6 +67,8 @@ export function mockCapabilities(): { voice: VoiceMode; interviewer: Interviewer
 
 export async function createMockSession(userId: string, input: { slug: string; config: MockConfig; language: Language }): Promise<string> {
   await ensureMigrated();
+  // A mock records a transcript of the candidate's voice, so it needs consent first.
+  if (!(await hasRecordingConsent(userId))) throw new ConsentRequiredError();
   const id = randomUUID();
   const caps = mockCapabilities();
   await db.insert(schema.mockSessions).values({
