@@ -15,7 +15,7 @@ Phase 1, the practice core, is built: onboarding, a 99-problem bank over 18 patt
 
 Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds and code comprehension and debugging rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
 
-Phase 4 is under way: system design rounds on a shared whiteboard are built, on a conversation-round engine that the behavioral and code walkthrough rounds share.
+Phase 4 is under way: system design rounds on a shared whiteboard and behavioral rounds with a story bank are built, on a conversation-round engine that the code walkthrough round will share too.
 
 ## Running it on your computer
 
@@ -85,7 +85,7 @@ npm run typecheck
 | Feedback reports | Analysis and grading in `src/lib/feedback` | Shown on the recap page, `src/app/mock/[id]` |
 | Company research | Research job, versions and review queue in `src/lib/research` | Review page `src/app/research`, cron route `src/app/api/cron/research` |
 | AI-assisted rounds | Tasks, assistant, harness and grading in `src/lib/assisted` | Pages in `src/app/assisted`, API in `src/app/api/assisted` |
-| Conversation rounds | Shared engine (turns, time box, grading, Today suggestions) in `src/lib/rounds`; system design in `src/lib/design` | Hub `src/app/rounds`, pages `src/app/design`, API `src/app/api/rounds` |
+| Conversation rounds | Shared engine (turns, time box, grading, Today suggestions) in `src/lib/rounds`; system design in `src/lib/design`; behavioral in `src/lib/behavioral` | Hub `src/app/rounds`, pages `src/app/design` and `src/app/behavioral`, API `src/app/api/rounds` |
 | Voice agent | LiveKit Agents worker, its own package | `agent/` |
 
 ### The learning engine (spec 4.2)
@@ -155,6 +155,13 @@ System design, behavioral and code walkthrough rounds are timed conversations wi
 - **Plan**: Today suggests a round when it fits your level, your target companies' loops (from approved research) and the time left, with the last report's top focus area as a drill. Rounds never change your coding pattern ratings.
 
 **System design** (`src/lib/design`): eight prompts (link shortener, news feed, chat, rate limiter, notifications, ride-hailing dispatch, file sync, autocomplete), each with the requirements and scale numbers the interviewer reveals when asked, the components a solid design includes, and three deep dives with what a strong answer covers. You draw on an [Excalidraw](https://excalidraw.com) whiteboard; `design/scene.ts` turns the board into text (labelled boxes and the arrows between them) for the interviewer and the grader. The scripted interviewer moves through requirements, estimates, API and data model, high-level design, deep dives, scale and failure, and a wrap-up, asks about core components it can't find on the board, and keeps to the clock. The report shows your final board, which components were drawn, only mentioned or missing, how much of each deep dive you covered, and a reference outline.
+
+**Behavioral** (`src/lib/behavioral`): a story bank at `/behavioral/stories` and timed rounds at `/behavioral`.
+
+- **Resume**: paste the text or upload a PDF (up to 5 MB). The PDF is read on the server with [unpdf](https://github.com/unjs/unpdf) and only the text is stored. "Draft stories" turns it into story seeds: Claude writes them when `ANTHROPIC_API_KEY` is set; otherwise bullets that start with an action verb become stories with the action and result filled in (the clause with a number becomes the result) under the role they sit beneath.
+- **Stories**: a STAR editor with live checks (each part filled in, a brief situation, actions in the first person, a number in the result, about two minutes long) and competency tags it suggests from the text. Fourteen competencies (ownership, conflict, failure, leadership, ambiguity and so on) map to each company's principles: all 16 of Amazon's Leadership Principles, plus values for Google, Meta, Microsoft, Apple, Bloomberg, Uber, Stripe and startups. A coverage table shows which stories cover each principle and calls out the gaps.
+- **Rounds**: six question sets (Amazon leadership principles, Google and general, conflict and failure, senior leadership, new grad, fast-moving teams) from a bank of 40 questions. 20, 30 or 45 minutes asks 3, 4 or 6 questions. The round starts with a snapshot of your story titles and summaries, so the Claude interviewer can ask about them. The scripted interviewer asks the questions in order, follows up on one or two gaps in each answer (the situation, what you personally did, the outcome and numbers, what you'd do differently), skips follow-ups when behind the clock, then asks if you have questions and closes.
+- **Report**: STAR results per question (which parts were there, numbers, how much was "I" versus "we", reflection, length), the principles each answer showed, and a rubric of structure, specificity, ownership, impact, reflection, relevance and communication. Any answer can be saved to the story bank, split roughly into STAR for editing.
 
 ### Keeping interview data current (spec 4.6)
 
