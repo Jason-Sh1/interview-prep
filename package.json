@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "validate:bank": "tsx scripts/validate-bank.ts",
+    "eval:feedback": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/eval-feedback.ts",
     "research": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/research.ts",
     "db:generate": "drizzle-kit generate",
     "postinstall": "node scripts/copy-vendor.mjs"

@@ -1,0 +1,942 @@
+{
+  "grader": "heuristic",
+  "model": null,
+  "ranAt": "2026-10-31T07:23:11.472Z",
+  "labelStatus": "draft: needs human review",
+  "labelsHash": "709a56b37248",
+  "reviewedSessions": 0,
+  "summary": {
+    "sessions": 24,
+    "overall": {
+      "truePositives": 87,
+      "falsePositives": 47,
+      "falseNegatives": 16,
+      "precision": 0.649,
+      "recall": 0.845,
+      "f1": 0.734
+    },
+    "byPolarity": {
+      "strength": {
+        "truePositives": 56,
+        "falsePositives": 21,
+        "falseNegatives": 11,
+        "precision": 0.727,
+        "recall": 0.836,
+        "f1": 0.778
+      },
+      "weakness": {
+        "truePositives": 31,
+        "falsePositives": 26,
+        "falseNegatives": 5,
+        "precision": 0.544,
+        "recall": 0.861,
+        "f1": 0.667
+      }
+    },
+    "byArea": {
+      "understanding": {
+        "truePositives": 14,
+        "falsePositives": 7,
+        "falseNegatives": 2,
+        "precision": 0.667,
+        "recall": 0.875,
+        "f1": 0.757
+      },
+      "approach": {
+        "truePositives": 19,
+        "falsePositives": 4,
+        "falseNegatives": 1,
+        "precision": 0.826,
+        "recall": 0.95,
+        "f1": 0.884
+      },
+      "correctness": {
+        "truePositives": 18,
+        "falsePositives": 4,
+        "falseNegatives": 0,
+        "precision": 0.818,
+        "recall": 1,
+        "f1": 0.9
+      },
+      "testing": {
+        "truePositives": 10,
+        "falsePositives": 14,
+        "falseNegatives": 3,
+        "precision": 0.417,
+        "recall": 0.769,
+        "f1": 0.541
+      },
+      "complexity": {
+        "truePositives": 18,
+        "falsePositives": 5,
+        "falseNegatives": 3,
+        "precision": 0.783,
+        "recall": 0.857,
+        "f1": 0.818
+      },
+      "communication": {
+        "truePositives": 8,
+        "falsePositives": 13,
+        "falseNegatives": 7,
+        "precision": 0.381,
+        "recall": 0.533,
+        "f1": 0.444
+      }
+    },
+    "hireAgreement": 0.667,
+    "hireWithinOne": 1
+  },
+  "sessions": [
+    {
+      "id": "01-strong-clean",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "falsePositives": [],
+      "falseNegatives": [],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "hire",
+        "strong-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "02-silent-coder",
+      "expected": [
+        "understanding:weakness",
+        "approach:weakness",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:weakness",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "falsePositives": [],
+      "falseNegatives": [
+        "approach:weakness"
+      ],
+      "hire": "strong-no",
+      "hireAccepted": [
+        "strong-no",
+        "no"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "03-strong-raw-stt",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "falsePositives": [
+        "understanding:weakness"
+      ],
+      "falseNegatives": [
+        "understanding:strength"
+      ],
+      "hire": "hire",
+      "hireAccepted": [
+        "hire",
+        "strong-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "04-brute-force-only",
+      "expected": [
+        "understanding:strength",
+        "approach:weakness",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:weakness",
+        "communication:strength"
+      ],
+      "falsePositives": [
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "no",
+        "lean-hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "05-wrong-complexity-claim",
+      "expected": [
+        "approach:strength",
+        "correctness:strength",
+        "complexity:weakness"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "approach:strength",
+        "correctness:strength",
+        "complexity:weakness"
+      ],
+      "falsePositives": [
+        "understanding:weakness",
+        "testing:weakness",
+        "communication:strength"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "06-hint-heavy",
+      "expected": [
+        "approach:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "approach:weakness",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "understanding:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "communication:weakness"
+      ],
+      "falseNegatives": [
+        "communication:strength"
+      ],
+      "hire": "hire",
+      "hireAccepted": [
+        "no",
+        "lean-hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "07-out-of-time",
+      "expected": [
+        "understanding:strength",
+        "correctness:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:strength",
+        "complexity:weakness"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "correctness:weakness"
+      ],
+      "falsePositives": [
+        "approach:weakness",
+        "testing:strength",
+        "complexity:weakness"
+      ],
+      "falseNegatives": [
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "hire": "lean-hire",
+      "hireAccepted": [
+        "no",
+        "lean-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "08-submit-without-testing",
+      "expected": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "communication:strength"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "09-nervous-fillers",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "falsePositives": [
+        "testing:strength"
+      ],
+      "falseNegatives": [],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "10-debug-narrator",
+      "expected": [
+        "approach:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "approach:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "understanding:weakness",
+        "correctness:strength",
+        "testing:weakness",
+        "communication:weakness"
+      ],
+      "falseNegatives": [
+        "testing:strength",
+        "communication:strength"
+      ],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "11-silent-after-failure",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "falsePositives": [
+        "correctness:strength",
+        "testing:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "12-typed-only",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "understanding:weakness",
+        "testing:weakness",
+        "communication:strength"
+      ],
+      "falseNegatives": [
+        "understanding:strength",
+        "testing:strength"
+      ],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "hire",
+        "strong-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "13-memorized-no-explain",
+      "expected": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:weakness",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:weakness"
+      ],
+      "falsePositives": [
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "falseNegatives": [
+        "communication:weakness"
+      ],
+      "hire": "lean-hire",
+      "hireAccepted": [
+        "strong-no",
+        "no"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "14-over-clarifier",
+      "expected": [
+        "approach:weakness",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "approach:weakness",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "understanding:strength",
+        "testing:strength",
+        "communication:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "no",
+        "lean-hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "15-greedy-trap",
+      "expected": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "complexity:weakness"
+      ],
+      "predicted": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness"
+      ],
+      "truePositives": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness"
+      ],
+      "falsePositives": [],
+      "falseNegatives": [
+        "complexity:weakness"
+      ],
+      "hire": "no",
+      "hireAccepted": [
+        "strong-no",
+        "no"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "16-strong-senior-google",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "falsePositives": [
+        "testing:weakness"
+      ],
+      "falseNegatives": [
+        "testing:strength"
+      ],
+      "hire": "hire",
+      "hireAccepted": [
+        "hire",
+        "strong-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "17-no-complexity",
+      "expected": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "complexity:weakness"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "complexity:weakness"
+      ],
+      "falsePositives": [
+        "testing:weakness",
+        "communication:strength"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "18-gave-up",
+      "expected": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "complexity:weakness"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:weakness",
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "complexity:weakness"
+      ],
+      "falsePositives": [
+        "communication:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "strong-no",
+      "hireAccepted": [
+        "strong-no"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "19-silent-off-by-one",
+      "expected": [
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "approach:weakness",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "falsePositives": [
+        "approach:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "lean-hire",
+      "hireAccepted": [
+        "no",
+        "lean-hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "20-rambler",
+      "expected": [
+        "understanding:strength",
+        "correctness:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "approach:strength",
+        "testing:strength",
+        "communication:strength"
+      ],
+      "falseNegatives": [
+        "communication:weakness"
+      ],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "21-edge-case-thorough-slow",
+      "expected": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "approach:weakness",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "communication:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    },
+    {
+      "id": "22-new-grad-solid",
+      "expected": [
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "predicted": [
+        "understanding:weakness",
+        "approach:strength",
+        "correctness:strength",
+        "testing:weakness",
+        "complexity:strength",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "approach:strength",
+        "correctness:strength",
+        "complexity:strength"
+      ],
+      "falsePositives": [
+        "understanding:weakness",
+        "testing:weakness",
+        "communication:weakness"
+      ],
+      "falseNegatives": [],
+      "hire": "hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "23-argues-with-tests",
+      "expected": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "communication:weakness"
+      ],
+      "predicted": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness",
+        "complexity:strength"
+      ],
+      "truePositives": [
+        "approach:weakness",
+        "correctness:weakness",
+        "testing:weakness"
+      ],
+      "falsePositives": [
+        "complexity:strength"
+      ],
+      "falseNegatives": [
+        "communication:weakness"
+      ],
+      "hire": "no",
+      "hireAccepted": [
+        "strong-no",
+        "no"
+      ],
+      "hireAgrees": true,
+      "hireDistance": 0
+    },
+    {
+      "id": "24-one-hint-then-strong",
+      "expected": [
+        "understanding:strength",
+        "correctness:strength",
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "predicted": [
+        "understanding:strength",
+        "approach:strength",
+        "correctness:strength",
+        "testing:strength",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "truePositives": [
+        "understanding:strength",
+        "correctness:strength"
+      ],
+      "falsePositives": [
+        "approach:strength",
+        "testing:strength",
+        "complexity:weakness",
+        "communication:weakness"
+      ],
+      "falseNegatives": [
+        "complexity:strength",
+        "communication:strength"
+      ],
+      "hire": "strong-hire",
+      "hireAccepted": [
+        "lean-hire",
+        "hire"
+      ],
+      "hireAgrees": false,
+      "hireDistance": 1
+    }
+  ]
+}
