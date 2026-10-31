@@ -78,6 +78,13 @@
       "when": 1791785211989,
       "tag": "0010_diagnostics",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793428590584,
+      "tag": "0011_conversation_rounds",
+      "breakpoints": true
     }
   ]
 }
