@@ -1,7 +1,9 @@
+import { DIAGNOSTIC_MINUTES } from "@/lib/diagnostic/plan";
+
 // Where a first-time user is in setting up: goals, then the diagnostic, then the plan.
 const STEPS = [
   { label: "Your goals", detail: "2 minutes" },
-  { label: "Diagnostic", detail: "about 35 minutes, skippable" },
+  { label: "Diagnostic", detail: `about ${DIAGNOSTIC_MINUTES} minutes, skippable` },
   { label: "Your daily plan", detail: "start practicing" },
 ];
 

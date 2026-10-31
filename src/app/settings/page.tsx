@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { githubEnabled } from "@/lib/auth/auth";
 import { isSingleUser } from "@/lib/auth/mode";
 import { requireUser } from "@/lib/auth/session";
 import { getPrivacy, retentionDays } from "@/lib/privacy";
 import { deleteAllDataAction, deleteRecordingsAction, setConsentAction } from "./actions";
+import { LinkGitHub } from "./LinkGitHub";
 
 export default async function SettingsPage({ searchParams }: PageProps<"/settings">) {
   const user = await requireUser();
@@ -48,6 +50,22 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           <button className="btn-secondary">Delete all my recordings now</button>
         </form>
       </section>
+
+      {!isSingleUser() && githubEnabled && (
+        <section className="card mt-4 p-5">
+          <h2 className="font-medium">GitHub</h2>
+          <p className="mt-1 text-sm text-muted">
+            {user.emailVerified
+              ? "Your email is verified through GitHub."
+              : "Link a GitHub account with the same email to verify it (needed for admin pages) and to sign in with GitHub."}
+          </p>
+          {!user.emailVerified && (
+            <div className="mt-4">
+              <LinkGitHub />
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="card mt-4 border-bad p-5">
         <h2 className="font-medium text-bad">Delete all my data</h2>

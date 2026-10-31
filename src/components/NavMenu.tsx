@@ -21,7 +21,7 @@ export function NavMenu({ links }: { links: { href: string; label: string; badge
   }, [open]);
   const current = links.find((l) => pathname.startsWith(l.href));
   return (
-    <div ref={box} className="relative lg:hidden">
+    <div ref={box} className="relative xl:hidden">
       <button className="btn-ghost" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
         {current?.label ?? "Menu"} <span aria-hidden>▾</span>
       </button>
