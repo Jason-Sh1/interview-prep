@@ -21,13 +21,18 @@ const migrationsFolder = path.join(process.cwd(), "drizzle");
 function create(): { db: DB; migrate: () => Promise<void> } {
   const url = process.env.DATABASE_URL;
   if (url) {
-    const client = postgres(url, { max: 10 });
+    // Columns are `timestamp` (no time zone) and Drizzle reads them as UTC, so
+    // the session must be UTC too or `now()` defaults come back shifted.
+    const client = postgres(url, { max: 10, connection: { TimeZone: "UTC" } });
     const db = drizzlePostgres(client, { schema });
     return { db: db as unknown as DB, migrate: () => migratePostgres(db, { migrationsFolder }) };
   }
   const dir = process.env.PGLITE_DIR || path.join(process.cwd(), ".data", "pglite");
   mkdirSync(dir, { recursive: true });
   const client = new PGlite(dir);
+  // PGlite takes the machine's time zone; pin it to UTC (see above). Queued
+  // ahead of any other query, since PGlite runs them one at a time in order.
+  client.exec("SET TIME ZONE 'UTC'").catch((e) => console.error("Could not set the database time zone to UTC", e));
   const db = drizzlePglite(client, { schema });
   return { db: db as unknown as DB, migrate: () => migratePglite(db, { migrationsFolder }) };
 }
