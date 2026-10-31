@@ -13,7 +13,9 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 Phase 1, the practice core, is built: onboarding, a 99-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
 
-Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
+Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds and code comprehension and debugging rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
+
+Phase 4 is under way: system design rounds on a shared whiteboard are built, on a conversation-round engine that the behavioral and code walkthrough rounds share.
 
 ## Running it on your computer
 
@@ -44,7 +46,7 @@ The one worth adding first is `ANTHROPIC_API_KEY` (from [console.anthropic.com](
 2. **Diagnostic**: three short problems and a 15-minute mock, so the plan starts at your real level instead of guessing.
 3. **Today** is your daily plan. Work through it top to bottom: new problems, FSRS reviews that are due, drills from past feedback. It re-plans after every attempt, so missing a day is fine.
 4. A few times a week, do a **Mock interview** (use headphones, Chrome or Edge for voice), and read the feedback report afterwards; its weak spots come back in your plan.
-5. As your interview gets closer, add **AI-assisted** and **Debugging** rounds, and check the **Skill map** to see which patterns are weak.
+5. As your interview gets closer, open **Rounds** for the other formats (AI-assisted, debugging, system design and more; Today suggests which ones), and check the **Skill map** to see which patterns are weak.
 
 ### Deploying it
 
@@ -83,6 +85,7 @@ npm run typecheck
 | Feedback reports | Analysis and grading in `src/lib/feedback` | Shown on the recap page, `src/app/mock/[id]` |
 | Company research | Research job, versions and review queue in `src/lib/research` | Review page `src/app/research`, cron route `src/app/api/cron/research` |
 | AI-assisted rounds | Tasks, assistant, harness and grading in `src/lib/assisted` | Pages in `src/app/assisted`, API in `src/app/api/assisted` |
+| Conversation rounds | Shared engine (turns, time box, grading, Today suggestions) in `src/lib/rounds`; system design in `src/lib/design` | Hub `src/app/rounds`, pages `src/app/design`, API `src/app/api/rounds` |
 | Voice agent | LiveKit Agents worker, its own package | `agent/` |
 
 ### The learning engine (spec 4.2)
@@ -142,6 +145,16 @@ Modeled on the AI-enabled rounds companies such as Meta and Shopify now run: you
 - **Tests run in your browser**: `assisted/harness.ts` builds a small CommonJS + Jest-style runner over the repo files and runs it in a Web Worker.
 - **Recording**: prompts, answers (with planted bugs), snapshots, pastes (and whether they came from an answer) and test runs go to `assisted_events`.
 - **Grading** (`assisted/grade.ts`) scores decomposition, prompt quality, review of AI output, correctness and ownership, reports every planted bug as caught, missed or not used, and gives a hire signal. With a key, Claude (`claude-opus-5-5`) writes the rubric from the same evidence, keeping the measured bug outcomes and test results.
+
+### Conversation rounds (spec 4.5, phase 4)
+
+System design, behavioral and code walkthrough rounds are timed conversations with an AI interviewer around something you build or bring. They share one engine (`src/lib/rounds`): a `rounds` table holding the setup, the transcript and the artifact, a streamed turn API (`POST /api/rounds/[id]/turn`), the browser-voice conversation panel, a server-enforced time box, and a report page. Each kind plugs in a `RoundKindDef` (`rounds/kind.ts`): its topics, artifact schema, Claude system prompt, scripted interviewer, rule-based grader and rubric. Find them all under **Rounds** in the nav.
+
+- **Interviewer**: Claude (`claude-sonnet-5-5`) when `ANTHROPIC_API_KEY` is set, seeing the artifact (the whiteboard, notes or code) on every turn; otherwise a scripted interviewer per kind that follows the same arc. Voice is the browser's speech recognition and synthesis, like browser-voice mocks; typing always works.
+- **Reports**: a rule-based report from the transcript and artifact (rubric, checklist, key moments, top three focus areas, hire signal calibrated by company and level). With a key, Claude (`claude-opus-5-5`) rewrites the rubric and focus areas from the same evidence, keeping the measured checks.
+- **Plan**: Today suggests a round when it fits your level, your target companies' loops (from approved research) and the time left, with the last report's top focus area as a drill. Rounds never change your coding pattern ratings.
+
+**System design** (`src/lib/design`): eight prompts (link shortener, news feed, chat, rate limiter, notifications, ride-hailing dispatch, file sync, autocomplete), each with the requirements and scale numbers the interviewer reveals when asked, the components a solid design includes, and three deep dives with what a strong answer covers. You draw on an [Excalidraw](https://excalidraw.com) whiteboard; `design/scene.ts` turns the board into text (labelled boxes and the arrows between them) for the interviewer and the grader. The scripted interviewer moves through requirements, estimates, API and data model, high-level design, deep dives, scale and failure, and a wrap-up, asks about core components it can't find on the board, and keeps to the clock. The report shows your final board, which components were drawn, only mentioned or missing, how much of each deep dive you covered, and a reference outline.
 
 ### Keeping interview data current (spec 4.6)
 

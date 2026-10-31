@@ -38,6 +38,10 @@ export default async function Home() {
       title: "Comprehension and debugging rounds",
       body: "Read an unfamiliar repo, explain how it works, and find the bugs seeded in it, graded on what you fixed, how you verified it and how you explain it.",
     },
+    {
+      title: "System design on a whiteboard",
+      body: "Design a real system on a shared whiteboard while an interviewer who can see your diagram drives requirements, estimates, deep dives and trade-offs.",
+    },
   ];
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-16">
