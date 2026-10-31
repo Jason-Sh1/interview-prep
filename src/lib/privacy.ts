@@ -5,7 +5,8 @@ import "server-only";
 // What counts as a recording: a mock interview's timeline (transcript of both
 // voices, code edits, test runs) and its feedback report, which quotes the
 // transcript; an AI-assisted round's chat, files and explanation; a debugging
-// round's chat, files and answers. Audio itself is never stored by the app:
+// round's chat, files and answers; a conversation round's (system design)
+// transcript, whiteboard and report. Audio itself is never stored by the app:
 // speech is turned into text by the browser or by LiveKit, and only the text
 // is kept.
 
@@ -59,6 +60,8 @@ export interface PurgeCounts {
   mockSessions: number;
   assistedSessions: number;
   debugRounds: number;
+  /** Conversation rounds (system design and later formats). */
+  rounds: number;
 }
 
 /**
@@ -111,7 +114,18 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
       .where(inArray(d.id, debugIds));
   }
 
-  return { mockSessions: mockIds.length, assistedSessions: assistedIds.length, debugRounds: debugIds.length };
+  const r = schema.rounds;
+  const roundIds = (
+    await db
+      .select({ id: r.id })
+      .from(r)
+      .where(and(isNull(r.purgedAt), opts.before ? lt(r.createdAt, opts.before) : undefined, opts.userId ? eq(r.userId, opts.userId) : undefined))
+  ).map((x) => x.id);
+  if (roundIds.length) {
+    await db.update(r).set({ transcript: [], artifact: {}, stage: {}, report: null, purgedAt: now }).where(inArray(r.id, roundIds));
+  }
+
+  return { mockSessions: mockIds.length, assistedSessions: assistedIds.length, debugRounds: debugIds.length, rounds: roundIds.length };
 }
 
 /** The daily retention job: purges recordings older than the limit. */

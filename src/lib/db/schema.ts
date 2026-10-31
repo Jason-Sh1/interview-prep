@@ -486,3 +486,74 @@ export const questionFrequency = pgTable(
   },
   (t) => [index("question_frequency_profile_idx").on(t.profileId), index("question_frequency_company_idx").on(t.companyId, t.problemSlug)],
 );
+
+// ---------------------------------------------------------------------------
+// Conversation rounds (spec 4.5, phase 4): system design, behavioral and code
+// walkthrough. One table for all three; the kind decides what the artifact holds.
+
+/** One conversation round: setup, the transcript, the candidate's artifact, and its report. */
+export const rounds = pgTable(
+  "rounds",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** "design", "behavioral" or "walkthrough". */
+    kind: text("kind").notNull(),
+    /** The design prompt, behavioral question set, or walkthrough id. */
+    topicId: text("topic_id").notNull(),
+    /** minutes, persona, company, level. */
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    /** "claude" or "scripted". */
+    interviewer: text("interviewer").notNull(),
+    /** Design: whiteboard scene. Behavioral: stories in play. Walkthrough: the code under discussion. */
+    artifact: jsonb("artifact").$type<Record<string, unknown>>().notNull().default({}),
+    /** Both sides of the conversation, appended in SQL. */
+    transcript: jsonb("transcript").$type<{ speaker: "interviewer" | "candidate"; text: string; t: number; source?: string; interrupted?: boolean }[]>().notNull().default([]),
+    /** The scripted interviewer's state (phase, questions asked). */
+    stage: jsonb("stage").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    /** When the candidate pressed Start; the clock runs from here. */
+    startedAt: timestamp("started_at"),
+    endedAt: timestamp("ended_at"),
+    /** The RoundReport from src/lib/rounds/types.ts, once built. */
+    report: jsonb("report").$type<Record<string, unknown>>(),
+    /** When the retention limit deleted its transcript, whiteboard and report. */
+    purgedAt: timestamp("purged_at"),
+  },
+  (t) => [index("rounds_user_kind_idx").on(t.userId, t.kind, t.createdAt)],
+);
+
+/** The behavioral story bank: STAR stories, drafted from a resume or written by hand. */
+export const stories = pgTable(
+  "stories",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    situation: text("situation").notNull().default(""),
+    task: text("task").notNull().default(""),
+    action: text("action").notNull().default(""),
+    result: text("result").notNull().default(""),
+    /** Competencies it shows (ownership, conflict, failure...), from src/lib/behavioral. */
+    competencies: jsonb("competencies").$type<string[]>().notNull().default([]),
+    /** "resume", "manual" or "round" (written up after a behavioral round). */
+    origin: text("origin").notNull().default("manual"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("stories_user_idx").on(t.userId)],
+);
+
+/** The user's resume as plain text (pasted or extracted from a PDF), for the story bank. */
+export const resumes = pgTable("resumes", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  fileName: text("file_name"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

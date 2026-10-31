@@ -22,7 +22,9 @@ export default function PrivacyPage() {
           <strong>Mock interview recordings</strong>, only after you agree: a text transcript of what you and the interviewer said, your code as you
           typed it, test runs, and the feedback report built from them.
         </li>
+        <li><strong>System design rounds</strong>, only after you agree: the transcript, your whiteboard and the report.</li>
         <li><strong>AI-assisted and debugging rounds</strong>: your chat with the assistant, your files, answers and the report.</li>
+        <li><strong>Behavioral prep</strong>, if you add them: your resume text and the stories in your story bank.</li>
       </ul>
 
       <h2 className="mt-8 text-lg font-semibold">What we don&apos;t store</h2>
@@ -47,7 +49,7 @@ export default function PrivacyPage() {
 
       <h2 className="mt-8 text-lg font-semibold">How long we keep it</h2>
       <p className="mt-2">
-        Recordings (mock transcripts, code timelines, feedback reports, and AI round chats and files) are deleted automatically {days} days after the
+        Recordings (mock and design-round transcripts, code timelines, whiteboards, feedback reports, and AI round chats and files) are deleted automatically {days} days after the
         session. We keep a content-free note that a session happened (problem, date, length) so your progress and usage counts add up. Your account,
         goals and practice history stay until you delete them.
       </p>

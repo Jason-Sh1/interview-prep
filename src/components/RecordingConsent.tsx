@@ -4,14 +4,25 @@ import { retentionDays } from "@/lib/privacy";
 // The consent checkbox shown inside a form that starts a mock interview, until
 // the user has agreed once. The server refuses to create a mock without consent
 // (lib/mock.ts), so this is the only way in. Withdraw any time in Settings.
-export function RecordingConsent({ claude, livekit }: { claude: boolean; livekit: boolean }) {
+export function RecordingConsent({
+  claude,
+  livekit,
+  checkbox = true,
+  what = "mock interview",
+}: {
+  claude: boolean;
+  livekit: boolean;
+  /** Off where each start form carries its own small checkbox. */
+  checkbox?: boolean;
+  what?: string;
+}) {
   return (
     <div className="card space-y-2 border-accent p-4 text-sm">
-      <p className="font-medium">Before your first mock interview</p>
+      <p className="font-medium">Before your first {what}</p>
       <ul className="list-disc space-y-1 pl-5 text-muted">
         <li>
-          We save a <strong className="text-ink">text transcript</strong> of what you and the interviewer say, your code as you type it, and your test
-          runs, to build your feedback report and replay.
+          We save a <strong className="text-ink">text transcript</strong> of what you and the interviewer say, and your work (code and test runs, or
+          the whiteboard), to build your feedback report.
         </li>
         <li>
           <strong className="text-ink">Audio is never saved.</strong> Speech is turned into text by{" "}
@@ -25,10 +36,12 @@ export function RecordingConsent({ claude, livekit }: { claude: boolean; livekit
           <Link href="/privacy" className="text-accent hover:underline">privacy page</Link>.
         </li>
       </ul>
-      <label className="flex items-start gap-2 pt-1">
-        <input type="checkbox" name="consent" required className="mt-1" />
-        <span>I agree to my mock interviews being recorded as described.</span>
-      </label>
+      {checkbox && (
+        <label className="flex items-start gap-2 pt-1">
+          <input type="checkbox" name="consent" required className="mt-1" />
+          <span>I agree to my interviews being recorded as described.</span>
+        </label>
+      )}
     </div>
   );
 }

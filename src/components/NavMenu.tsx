@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 /** The nav links behind a Menu button on narrow screens. */
-export function NavMenu({ links }: { links: { href: string; label: string; badge?: number }[] }) {
+export function NavMenu({ links }: { links: { href: string; label: string; badge?: number; match?: string[] }[] }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const box = useRef<HTMLDivElement>(null);
@@ -19,7 +19,7 @@ export function NavMenu({ links }: { links: { href: string; label: string; badge
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [open]);
-  const current = links.find((l) => pathname.startsWith(l.href));
+  const current = links.find((l) => (l.match ?? [l.href]).some((m) => pathname.startsWith(m)));
   return (
     <div ref={box} className="relative xl:hidden">
       <button className="btn-ghost" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>

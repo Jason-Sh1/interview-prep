@@ -10,6 +10,9 @@ import { listDebugRounds } from "@/lib/comprehension";
 import { diagnosticPending } from "@/lib/diagnostic";
 import { listMockSessions } from "@/lib/mock";
 import { getWhatsNew, type WhatsNewItem } from "@/lib/research";
+import { getRoundSuggestions } from "@/lib/rounds";
+import { builtKinds } from "@/lib/rounds/registry";
+import { ROUND_INFO } from "@/lib/rounds/types";
 import { getTrackState } from "@/lib/track";
 import { variantsWaiting, type Variant } from "@/lib/variants";
 
@@ -49,6 +52,10 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
     plan.items.filter((i) => i.kind === "review" && cards.some((c) => c.problemSlug === i.slug && c.reps > 0)).map((i) => i.slug),
   ).catch(() => new Map<string, Variant>());
   const todayAttempts = attempts.filter((a) => plan.doneToday.includes(a.problemSlug));
+  const { suggestions: roundSuggestions, history: roundHistory } = await getRoundSuggestions(user.id, goals, plan.daysLeft).catch(() => ({
+    suggestions: [],
+    history: [],
+  }));
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -119,6 +126,29 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
         </Link>
       )}
 
+      {roundSuggestions.length > 0 && (
+        <section className="mt-6 space-y-2">
+          {roundSuggestions.map((r) => (
+            <Link key={r.kind} href={ROUND_INFO[r.kind].path} className="card flex items-start gap-4 p-4 transition-colors hover:border-accent">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{ROUND_INFO[r.kind].label} round</span>
+                  <Tag tone="accent">Suggested</Tag>
+                </div>
+                <p className="mt-1 text-sm text-muted">{r.reason}</p>
+                {r.focus && (
+                  <p className="mt-1 text-sm">
+                    <span className="font-medium">From your last one, {r.focus.title.toLowerCase()}: </span>
+                    {r.focus.drill}
+                  </p>
+                )}
+              </div>
+              <span className="btn-secondary shrink-0">Start</span>
+            </Link>
+          ))}
+        </section>
+      )}
+
       <ol className="mt-6 space-y-3">
         {plan.items.map((item, i) => {
           const p = PROBLEM_BY_SLUG.get(item.slug)!;
@@ -177,6 +207,9 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
             body="Read an unfamiliar repo, explain it, and find the bugs seeded in it, with or without an assistant."
             last={lastDebug}
           />
+          {builtKinds().map((k) => (
+            <FormatCard key={k} href={ROUND_INFO[k].path} title={ROUND_INFO[k].label} body={ROUND_INFO[k].blurb} last={roundHistory.find((h) => h.kind === k)?.last ?? null} />
+          ))}
         </div>
       </section>
 

@@ -90,14 +90,14 @@ describe("cron jobs", () => {
 
   it("the retention route purges with the secret", async () => {
     vi.resetModules();
-    const purgeExpired = vi.fn(async () => ({ mockSessions: 2, assistedSessions: 0, debugRounds: 1 }));
+    const purgeExpired = vi.fn(async () => ({ mockSessions: 2, assistedSessions: 0, debugRounds: 1, rounds: 0 }));
     vi.doMock("@/lib/privacy", () => ({ purgeExpired, retentionDays: () => 90 }));
     process.env.CRON_SECRET = "s3cret";
     const { GET } = await import("@/app/api/cron/retention/route");
     expect((await GET(req())).status).toBe(401);
     expect(purgeExpired).not.toHaveBeenCalled();
     const res = await GET(req("Bearer s3cret"));
-    expect(await res.json()).toEqual({ retentionDays: 90, purged: { mockSessions: 2, assistedSessions: 0, debugRounds: 1 } });
+    expect(await res.json()).toEqual({ retentionDays: 90, purged: { mockSessions: 2, assistedSessions: 0, debugRounds: 1, rounds: 0 } });
     vi.doUnmock("@/lib/privacy");
   });
 

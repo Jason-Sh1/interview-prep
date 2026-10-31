@@ -17,7 +17,7 @@ export default async function StatsPage() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Stat label="Active users this week" value={latest.activeUsers} />
-        <Stat label="Sessions completed this week" value={latest.sessionsCompleted} hint="Mocks, AI-assisted and debugging rounds" />
+        <Stat label="Sessions completed this week" value={latest.sessionsCompleted} hint="Mocks, AI-assisted, debugging and system design rounds" />
         <Stat label="Practice attempts this week" value={latest.completed.practice} />
       </div>
 
@@ -31,6 +31,7 @@ export default async function StatsPage() {
             <th className="py-1 text-right font-normal">Mocks</th>
             <th className="py-1 text-right font-normal">AI-assisted</th>
             <th className="py-1 text-right font-normal">Debugging</th>
+            <th className="py-1 text-right font-normal">Design</th>
             <th className="py-1 text-right font-normal">Practice</th>
           </tr>
         </thead>
@@ -47,6 +48,7 @@ export default async function StatsPage() {
               <td className="py-1.5 text-right tabular-nums">{w.completed.mock}</td>
               <td className="py-1.5 text-right tabular-nums">{w.completed.assisted}</td>
               <td className="py-1.5 text-right tabular-nums">{w.completed.debug}</td>
+              <td className="py-1.5 text-right tabular-nums">{w.completed.round}</td>
               <td className="py-1.5 text-right tabular-nums">{w.completed.practice}</td>
             </tr>
           ))}

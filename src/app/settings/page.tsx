@@ -43,7 +43,8 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       <section className="card mt-4 p-5">
         <h2 className="font-medium">Retention</h2>
         <p className="mt-1 text-sm text-muted">
-          Interview recordings (mock transcripts, code timelines and reports, and the chats and files from AI-assisted and debugging rounds) are deleted
+          Interview recordings (mock and system design transcripts, code timelines, whiteboards and reports, and the chats and files from AI-assisted and
+          debugging rounds) are deleted
           automatically {days} days after the session. Your plan, ratings and solved problems stay until you delete your account.
         </p>
         <form action={deleteRecordingsAction} className="mt-4">

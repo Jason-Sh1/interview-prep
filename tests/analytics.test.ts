@@ -24,7 +24,7 @@ describe("weekly usage stats", () => {
     expect(weeks[2]).toEqual({
       weekStart: "2026-10-26",
       activeUsers: 2,
-      completed: { practice: 2, mock: 1, assisted: 0, debug: 0 },
+      completed: { practice: 2, mock: 1, assisted: 0, debug: 0, round: 0 },
       sessionsCompleted: 1,
     });
     expect(weeks[1]).toMatchObject({ activeUsers: 1, sessionsCompleted: 1 });

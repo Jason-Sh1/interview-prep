@@ -22,6 +22,65 @@ function bruteLongestUnique(s: string): number {
   return best;
 }
 
+function bruteMaxAverage(nums: number[], k: number): number {
+  let best = -Infinity;
+  for (let i = 0; i + k <= nums.length; i++) {
+    let s = 0;
+    for (let j = i; j < i + k; j++) s += nums[j];
+    best = Math.max(best, s / k);
+  }
+  return best;
+}
+
+function bruteMinLen(target: number, nums: number[]): number {
+  let best = 0;
+  for (let i = 0; i < nums.length; i++) {
+    let s = 0;
+    for (let j = i; j < nums.length; j++) {
+      s += nums[j];
+      if (s >= target) {
+        if (!best || j - i + 1 < best) best = j - i + 1;
+        break;
+      }
+    }
+  }
+  return best;
+}
+
+function bruteContainsPermutation(s1: string, s2: string): boolean {
+  const key = (s: string) => s.split("").sort().join("");
+  const want = key(s1);
+  for (let i = 0; i + s1.length <= s2.length; i++) if (key(s2.slice(i, i + s1.length)) === want) return true;
+  return false;
+}
+
+function bruteReplacement(s: string, k: number): number {
+  let best = 0;
+  for (let i = 0; i < s.length; i++) {
+    const count = new Map<string, number>();
+    let top = 0;
+    for (let j = i; j < s.length; j++) {
+      const c = (count.get(s[j]) ?? 0) + 1;
+      count.set(s[j], c);
+      top = Math.max(top, c);
+      if (j - i + 1 - top <= k) best = Math.max(best, j - i + 1);
+    }
+  }
+  return best;
+}
+
+function bruteWindowMax(nums: number[], k: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i + k <= nums.length; i++) out.push(Math.max(...nums.slice(i, i + k)));
+  return out;
+}
+
+const bigReadings = Array.from({ length: 3000 }, (_, i) => ((i * 7919) % 2001) - 1000);
+const bigPositives = Array.from({ length: 3000 }, (_, i) => ((i * 31 + 7) % 50) + 1);
+const bigHay = Array.from({ length: 2000 }, (_, i) => "abcdef"[(i * i + i) % 6]).join("");
+const bigAB = Array.from({ length: 1500 }, (_, i) => "ABC"[(i * 5 + (i >> 4)) % 3]).join("");
+const bigWaves = Array.from({ length: 3000 }, (_, i) => ((i * 7919) % 10007) - 5000);
+
 export const slidingWindow: Problem[] = [
   {
     slug: "single-trade-profit",
@@ -190,6 +249,272 @@ Return the shortest piece of \`s\` that covers \`t\`. If several shortest pieces
     }
   }
   return bestLen === Infinity ? "" : s.slice(bestStart, bestStart + bestLen);
+}`,
+  },
+  {
+    slug: "best-k-day-average",
+    title: "Best K-Day Average",
+    pattern: "sliding-window",
+    difficulty: "easy",
+    rating: 950,
+    statement: `A sensor logged one integer reading per day in \`nums\`. Given an integer \`k\`, look at every run of exactly \`k\` consecutive days and return the highest average reading among them.
+
+Answers within \`10^-5\` of the true value are accepted.`,
+    constraints: ["1 <= k <= nums.length <= 10^5", "-10^4 <= nums[i] <= 10^4"],
+    hints: [
+      "Recomputing every window's sum from scratch is O(n·k). Neighboring windows share almost all their days.",
+      "Compute the sum of the first k values, then slide: add the value entering on the right and subtract the one leaving on the left. Track the best sum and divide by k once at the end.",
+      "s = sum(nums[:k]); best = s\nfor i in range(k, len(nums)):\n    s += nums[i] - nums[i - k]\n    best = max(best, s)\nreturn best / k",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "findMaxAverage",
+      params: [
+        { name: "nums", type: "int[]" },
+        { name: "k", type: "int" },
+      ],
+      returns: "float",
+      compare: "float",
+    },
+    tests: [
+      { input: [[1, 12, -5, -6, 50, 3], 4], expected: 12.75, sample: true },
+      { input: [[5], 1], expected: 5, sample: true },
+      { input: [[-1, -2, -3], 1], expected: -1, label: "all negative" },
+      { input: [[3, 3, 3, 3], 2], expected: 3, label: "all same" },
+      { input: [[1, 2, 3, 4], 4], expected: 2.5, label: "k equals length" },
+      { input: [[0, 4, 0, 3, 2], 1], expected: 4, label: "k is one" },
+      { input: [[7, 4, 5, 8, 8, 3, 9, 8, 7, 6], 7], expected: 7, label: "best window at the end" },
+      { input: [[-10000, 10000, -10000], 2], expected: 0, label: "extreme values" },
+      { input: [bigReadings, 37], expected: bruteMaxAverage(bigReadings, 37), label: "large input" },
+    ],
+    companies: ["Google", "Amazon", "Meta"],
+    source: { name: "LeetCode 643. Maximum Average Subarray I", url: "https://leetcode.com/problems/maximum-average-subarray-i/" },
+    reference: `function findMaxAverage(nums, k) {
+  let s = 0;
+  for (let i = 0; i < k; i++) s += nums[i];
+  let best = s;
+  for (let i = k; i < nums.length; i++) {
+    s += nums[i] - nums[i - k];
+    best = Math.max(best, s);
+  }
+  return best / k;
+}`,
+  },
+  {
+    slug: "shortest-run-reaching-target",
+    title: "Shortest Run Reaching Target",
+    pattern: "sliding-window",
+    difficulty: "medium",
+    rating: 1250,
+    statement: `You are given an array of positive integers \`nums\` and a positive integer \`target\`. Find the length of the shortest contiguous run of elements whose sum is **at least** \`target\`.
+
+Return \`0\` if no run reaches the target.`,
+    constraints: ["1 <= target <= 10^9", "1 <= nums.length <= 10^5", "1 <= nums[i] <= 10^4"],
+    hints: [
+      "All values are positive, so extending a run only increases its sum and shrinking it only decreases the sum.",
+      "Grow a window to the right, adding each value. While the window sum is at least target, record its length and shrink it from the left.",
+      "lo = s = 0; best = inf\nfor hi, x in enumerate(nums):\n    s += x\n    while s >= target:\n        best = min(best, hi - lo + 1)\n        s -= nums[lo]; lo += 1\nreturn 0 if best == inf else best",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "minSubArrayLen",
+      params: [
+        { name: "target", type: "int" },
+        { name: "nums", type: "int[]" },
+      ],
+      returns: "int",
+    },
+    tests: [
+      { input: [7, [2, 3, 1, 2, 4, 3]], expected: 2, sample: true },
+      { input: [11, [1, 1, 1, 1, 1, 1, 1, 1]], expected: 0, sample: true },
+      { input: [4, [1, 4, 4]], expected: 1, label: "single element suffices" },
+      { input: [15, [1, 2, 3, 4, 5]], expected: 5, label: "needs everything" },
+      { input: [1, [5]], expected: 1, label: "single element" },
+      { input: [100, [50]], expected: 0, label: "single element too small" },
+      { input: [11, [1, 2, 3, 4, 5]], expected: 3, label: "best at the end" },
+      { input: [6, [3, 3, 3, 3]], expected: 2, label: "all same" },
+      { input: [1000, bigPositives], expected: bruteMinLen(1000, bigPositives), label: "large input" },
+      { input: [1000000, bigPositives], expected: 0, label: "large, unreachable" },
+    ],
+    companies: ["Meta", "Amazon", "Google", "Goldman Sachs"],
+    source: { name: "LeetCode 209. Minimum Size Subarray Sum", url: "https://leetcode.com/problems/minimum-size-subarray-sum/" },
+    reference: `function minSubArrayLen(target, nums) {
+  let lo = 0, s = 0, best = Infinity;
+  for (let hi = 0; hi < nums.length; hi++) {
+    s += nums[hi];
+    while (s >= target) {
+      best = Math.min(best, hi - lo + 1);
+      s -= nums[lo++];
+    }
+  }
+  return best === Infinity ? 0 : best;
+}`,
+  },
+  {
+    slug: "hidden-shuffle-inside",
+    title: "Hidden Shuffle Inside",
+    pattern: "sliding-window",
+    difficulty: "medium",
+    rating: 1350,
+    statement: `Given two lowercase strings \`s1\` and \`s2\`, return \`true\` if some contiguous piece of \`s2\` is a reordering of \`s1\` (it uses exactly the same letters, the same number of times), and \`false\` otherwise.`,
+    constraints: ["1 <= s1.length, s2.length <= 10^4", "s1 and s2 consist of lowercase English letters."],
+    hints: [
+      "Any matching piece of s2 has exactly the same length as s1. What changes between two neighboring pieces of that length?",
+      "Keep letter counts for s1 and for a window of length len(s1) sliding over s2. Each step adds one letter and removes one. Compare the two 26-entry counts (or track how many letters currently match).",
+      "if len(s1) > len(s2): return False\nneed = Counter(s1); win = Counter(s2[:len(s1)])\nif win == need: return True\nfor i in range(len(s1), len(s2)):\n    win[s2[i]] += 1\n    win[s2[i - len(s1)]] -= 1\n    if win == need: return True\nreturn False",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "checkInclusion",
+      params: [
+        { name: "s1", type: "string" },
+        { name: "s2", type: "string" },
+      ],
+      returns: "bool",
+    },
+    tests: [
+      { input: ["ab", "eidbaooo"], expected: true, sample: true },
+      { input: ["ab", "eidboaoo"], expected: false, sample: true },
+      { input: ["a", "a"], expected: true, label: "single letter" },
+      { input: ["abc", "ab"], expected: false, label: "s1 longer than s2" },
+      { input: ["adc", "dcda"], expected: true, label: "match at the end" },
+      { input: ["aab", "abbba"], expected: false, label: "counts matter" },
+      { input: ["hello", "ooolleoooleh"], expected: false, label: "letters present but scattered" },
+      { input: ["abc", "cba"], expected: true, label: "whole string" },
+      { input: [bigHay.slice(1500, 1508).split("").reverse().join(""), bigHay], expected: true, label: "large input" },
+      { input: ["aabbccddeeff", bigHay], expected: bruteContainsPermutation("aabbccddeeff", bigHay), label: "large, balanced letters" },
+    ],
+    companies: ["Microsoft", "Amazon", "Meta", "Google"],
+    source: { name: "LeetCode 567. Permutation in String", url: "https://leetcode.com/problems/permutation-in-string/" },
+    reference: `function checkInclusion(s1, s2) {
+  const m = s1.length;
+  if (m > s2.length) return false;
+  const need = new Array(26).fill(0), win = new Array(26).fill(0);
+  for (let i = 0; i < m; i++) {
+    need[s1.charCodeAt(i) - 97]++;
+    win[s2.charCodeAt(i) - 97]++;
+  }
+  const same = () => need.every((c, i) => c === win[i]);
+  if (same()) return true;
+  for (let i = m; i < s2.length; i++) {
+    win[s2.charCodeAt(i) - 97]++;
+    win[s2.charCodeAt(i - m) - 97]--;
+    if (same()) return true;
+  }
+  return false;
+}`,
+  },
+  {
+    slug: "repaint-for-longest-streak",
+    title: "Repaint for the Longest Streak",
+    pattern: "sliding-window",
+    difficulty: "medium",
+    rating: 1400,
+    statement: `You are given a string \`s\` of uppercase letters and an integer \`k\`. You may repaint at most \`k\` characters, changing each to any uppercase letter you like.
+
+Return the length of the longest stretch of identical letters you can produce.`,
+    constraints: ["1 <= s.length <= 10^5", "s consists of uppercase English letters.", "0 <= k <= s.length"],
+    hints: [
+      "For a fixed window, how many repaints does it need to become all one letter?",
+      "A window needs (length - count of its most common letter) repaints. Grow the window to the right; when it needs more than k repaints, move the left edge one step. The best-seen max count never needs to decrease for the answer to be right.",
+      "count = defaultdict(int); lo = top = best = 0\nfor hi, c in enumerate(s):\n    count[c] += 1\n    top = max(top, count[c])\n    while hi - lo + 1 - top > k:\n        count[s[lo]] -= 1; lo += 1\n    best = max(best, hi - lo + 1)\nreturn best",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "characterReplacement",
+      params: [
+        { name: "s", type: "string" },
+        { name: "k", type: "int" },
+      ],
+      returns: "int",
+    },
+    tests: [
+      { input: ["ABAB", 2], expected: 4, sample: true },
+      { input: ["AABABBA", 1], expected: 4, sample: true },
+      { input: ["A", 0], expected: 1, label: "single letter" },
+      { input: ["ABCD", 0], expected: 1, label: "no repaints" },
+      { input: ["AAAA", 2], expected: 4, label: "already uniform" },
+      { input: ["ABCDE", 5], expected: 5, label: "k covers everything" },
+      { input: ["ABBB", 2], expected: 4, label: "k more than needed" },
+      { input: ["BAAAB", 0], expected: 3, label: "longest existing run" },
+      { input: ["ABCABCABC", 2], expected: 4, label: "three-letter cycle" },
+      { input: [bigAB, 25], expected: bruteReplacement(bigAB, 25), label: "large input" },
+    ],
+    companies: ["Google", "Amazon", "Meta", "Uber"],
+    source: {
+      name: "LeetCode 424. Longest Repeating Character Replacement",
+      url: "https://leetcode.com/problems/longest-repeating-character-replacement/",
+    },
+    reference: `function characterReplacement(s, k) {
+  const count = new Map();
+  let lo = 0, top = 0, best = 0;
+  for (let hi = 0; hi < s.length; hi++) {
+    const c = (count.get(s[hi]) || 0) + 1;
+    count.set(s[hi], c);
+    top = Math.max(top, c);
+    while (hi - lo + 1 - top > k) {
+      count.set(s[lo], count.get(s[lo]) - 1);
+      lo++;
+    }
+    best = Math.max(best, hi - lo + 1);
+  }
+  return best;
+}`,
+  },
+  {
+    slug: "peak-in-every-window",
+    title: "Peak in Every Window",
+    pattern: "sliding-window",
+    difficulty: "hard",
+    rating: 1700,
+    statement: `A window of width \`k\` slides across the integer array \`nums\` one position at a time, from the far left to the far right. For each of the \`n - k + 1\` positions, record the largest value inside the window.
+
+Return the recorded values in order. Aim for O(n) overall.`,
+    constraints: ["1 <= k <= nums.length <= 10^5", "-10^4 <= nums[i] <= 10^4"],
+    hints: [
+      "Once a larger value enters the window, the smaller values before it can never be a window maximum again.",
+      "Keep a deque of indices whose values are strictly decreasing. Before pushing index i, pop from the back every index with a value <= nums[i]; pop from the front if it fell out of the window. The front is the current maximum.",
+      "dq = deque(); out = []\nfor i, x in enumerate(nums):\n    while dq and nums[dq[-1]] <= x: dq.pop()\n    dq.append(i)\n    if dq[0] <= i - k: dq.popleft()\n    if i >= k - 1: out.append(nums[dq[0]])\nreturn out",
+    ],
+    complexity: { time: "O(n)", space: "O(k)" },
+    signature: {
+      kind: "function",
+      name: "maxSlidingWindow",
+      params: [
+        { name: "nums", type: "int[]" },
+        { name: "k", type: "int" },
+      ],
+      returns: "int[]",
+    },
+    tests: [
+      { input: [[1, 3, -1, -3, 5, 3, 6, 7], 3], expected: [3, 3, 5, 5, 6, 7], sample: true },
+      { input: [[1], 1], expected: [1], sample: true },
+      { input: [[4, 2, 12, 3], 1], expected: [4, 2, 12, 3], label: "window of one" },
+      { input: [[9, 8, 7, 6], 4], expected: [9], label: "window covers everything" },
+      { input: [[9, 8, 7, 6, 5], 2], expected: [9, 8, 7, 6], label: "decreasing" },
+      { input: [[1, 2, 3, 4, 5], 3], expected: [3, 4, 5], label: "increasing" },
+      { input: [[2, 2, 2, 2], 2], expected: [2, 2, 2], label: "all same" },
+      { input: [[-7, -8, 7, 5, 7, 1, 6, 0], 4], expected: [7, 7, 7, 7, 7], label: "repeated maximum" },
+      { input: [[-1, -5, -3], 2], expected: [-1, -3], label: "negatives" },
+      { input: [bigWaves, 50], expected: bruteWindowMax(bigWaves, 50), label: "large input" },
+    ],
+    companies: ["Amazon", "Google", "Microsoft", "Meta", "Uber"],
+    source: { name: "LeetCode 239. Sliding Window Maximum", url: "https://leetcode.com/problems/sliding-window-maximum/" },
+    reference: `function maxSlidingWindow(nums, k) {
+  const dq = new Array(nums.length);
+  let head = 0, tail = 0;
+  const out = [];
+  for (let i = 0; i < nums.length; i++) {
+    while (tail > head && nums[dq[tail - 1]] <= nums[i]) tail--;
+    dq[tail++] = i;
+    if (dq[head] <= i - k) head++;
+    if (i >= k - 1) out.push(nums[dq[head]]);
+  }
+  return out;
 }`,
   },
 ];

@@ -107,7 +107,22 @@ describe("privacy against the database", () => {
       answers: { q1: "because" },
     });
 
+    await db.insert(schema.rounds).values({
+      id: `r-${u.id}`,
+      userId: u.id,
+      kind: "design",
+      topicId: "url-shortener",
+      config: {},
+      interviewer: "scripted",
+      artifact: { board: "boxes" },
+      transcript: [{ speaker: "candidate", text: "my design", t: 1 }],
+      createdAt: new Date(Date.now() - 200 * DAY),
+      endedAt: new Date(Date.now() - 200 * DAY),
+      report: { quote: "my design" },
+    });
+
     const counts = await purgeExpired(new Date(), 90);
+    expect(counts.rounds).toBeGreaterThanOrEqual(1);
     expect(counts.mockSessions).toBeGreaterThanOrEqual(1);
     expect(counts.assistedSessions).toBeGreaterThanOrEqual(1);
     expect(counts.debugRounds).toBeGreaterThanOrEqual(1);
@@ -130,6 +145,9 @@ describe("privacy against the database", () => {
     expect(await db.select().from(schema.assistedEvents).where(eq(schema.assistedEvents.sessionId, `a-${u.id}`))).toEqual([]);
     const [d] = await db.select().from(schema.debugRounds).where(eq(schema.debugRounds.id, `d-${u.id}`));
     expect(d).toMatchObject({ chat: [], answers: null });
+    const [round] = await db.select().from(schema.rounds).where(eq(schema.rounds.id, `r-${u.id}`));
+    expect(round).toMatchObject({ transcript: [], artifact: {}, report: null });
+    expect(round.purgedAt).toBeInstanceOf(Date);
 
     // Running it again finds nothing new.
     const again = await purgeExpired(new Date(), 90);
@@ -170,6 +188,9 @@ describe("privacy against the database", () => {
       schema.drills,
       schema.assistedSessions,
       schema.debugRounds,
+      schema.rounds,
+      schema.resumes,
+      schema.stories,
       schema.diagnostics,
       schema.session,
       schema.account,
