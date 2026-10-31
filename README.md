@@ -11,7 +11,7 @@ See [docs/SPEC.md](docs/SPEC.md) for the full product spec, research, and tech s
 
 ## Status
 
-Phase 1, the practice core, is built: onboarding, a 99-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
+Phase 1, the practice core, is built: onboarding, a 144-problem bank over 18 patterns, an editor that runs Python and JavaScript against tests, and the adaptive daily plan with FSRS reviews.
 
 Phase 2, live voice mock interviews, is built: an AI interviewer you talk to while coding in the same editor, which sees your code and test runs, plus a recorded timeline (code edits, snapshots, runs, and both sides of the transcript) with a replay page. Phase 3 has started: after every mock you get a feedback report built from that timeline, and its weaknesses feed back into your plan. AI-assisted coding rounds and code comprehension and debugging rounds are built too, and a weekly research job keeps company interview data current with sourced, reviewed profiles.
 
