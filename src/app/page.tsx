@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { PATTERNS, PROBLEMS } from "@/lib/problems";
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps<"/">) {
   if (await getCurrentUser()) redirect("/today");
+  const { deleted } = await searchParams;
   const features = [
     {
       title: "Starts at your level",
@@ -41,6 +42,9 @@ export default async function Home() {
   ];
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-16">
+      {deleted && (
+        <div className="card mb-8 border-good bg-good-soft p-4 text-sm">Your account and all its data were deleted.</div>
+      )}
       <h1 className="max-w-2xl text-4xl font-semibold tracking-tight">
         Coding interview prep that adapts to every attempt you make.
       </h1>
@@ -61,6 +65,10 @@ export default async function Home() {
         ))}
       </div>
       <p className="mt-10 text-sm text-muted">
+        Your data stays yours: mock interviews are recorded only with your consent, never as audio, are deleted automatically after a while, and you
+        can delete everything any time. <Link href="/privacy" className="text-accent hover:underline">How we handle your data</Link>.
+      </p>
+      <p className="mt-3 text-sm text-muted">
         Company profiles are checked against recent interview reports every week, so the plan follows how each company interviews now.
       </p>
     </main>

@@ -1,6 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
+import { setRecordingConsent } from "@/lib/privacy";
 import { finishDiagnostic, skipDiagnostic, startDiagnostic, startDiagnosticMock } from "@/lib/diagnostic";
 
 export async function startDiagnosticAction() {
@@ -9,8 +10,9 @@ export async function startDiagnosticAction() {
   redirect("/diagnostic");
 }
 
-export async function startDiagnosticMockAction() {
+export async function startDiagnosticMockAction(form: FormData) {
   const { user, goals } = await requireOnboardedUser();
+  if (form.get("consent") === "on") await setRecordingConsent(user.id, true);
   const id = await startDiagnosticMock(user.id, goals.language);
   redirect(`/mock/${id}`);
 }

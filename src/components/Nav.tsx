@@ -18,7 +18,8 @@ export async function Nav() {
     { href: "/debug", label: "Debugging" },
     { href: "/progress", label: "Skill map" },
     { href: "/onboarding", label: "Goals" },
-    ...(admin ? [{ href: "/research", label: "Research", badge: pending || undefined }] : []),
+    { href: "/settings", label: "Settings" },
+    ...(admin ? [{ href: "/research", label: "Research", badge: pending || undefined }, { href: "/stats", label: "Usage" }] : []),
   ];
   return (
     <header className="border-b border-line bg-surface">

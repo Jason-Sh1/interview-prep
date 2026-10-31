@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { DifficultyBadge, Tag } from "@/components/badges";
+import { RecordingConsent } from "@/components/RecordingConsent";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { COMPANIES, COMPANY_BY_ID } from "@/lib/engine/companies";
 import { listMockSessions, mockCapabilities } from "@/lib/mock";
+import { getPrivacy } from "@/lib/privacy";
 import { PROBLEM_BY_SLUG, problemsForPattern } from "@/lib/problems";
 import { PATTERN_BY_ID, PATTERNS } from "@/lib/problems/patterns";
 import { getTrackState } from "@/lib/track";
@@ -11,7 +13,7 @@ import { startMockAction } from "./actions";
 export default async function MockSetupPage({ searchParams }: PageProps<"/mock">) {
   const { user, goals } = await requireOnboardedUser();
   const { problem: requested } = await searchParams;
-  const [{ plan }, sessions] = await Promise.all([getTrackState(user.id, goals), listMockSessions(user.id)]);
+  const [{ plan }, sessions, privacy] = await Promise.all([getTrackState(user.id, goals), listMockSessions(user.id), getPrivacy(user.id)]);
   const caps = mockCapabilities();
 
   // Default to the problem the plan would give next, so a mock also moves the track along.
@@ -27,7 +29,7 @@ export default async function MockSetupPage({ searchParams }: PageProps<"/mock">
       <h1 className="text-2xl font-semibold">Mock interview</h1>
       <p className="mt-1 text-muted">
         A live coding interview over voice. The interviewer sees your code as you type, asks questions, probes your complexity analysis and
-        gives hints if you allow them. Everything is recorded for the feedback report.
+        gives hints if you allow them. A transcript and your code are recorded for the feedback report (never audio).
       </p>
 
       <div className="card mt-6 space-y-1 p-4 text-sm">
@@ -103,6 +105,14 @@ export default async function MockSetupPage({ searchParams }: PageProps<"/mock">
           <input type="checkbox" name="hints" defaultChecked />
           Allow hints when I&apos;m stuck
         </label>
+        {privacy.recordingConsent ? (
+          <p className="text-xs text-muted">
+            Recording is on: transcript, code and test runs, kept for the retention period.{" "}
+            <Link href="/settings" className="text-accent hover:underline">Manage in Settings</Link>.
+          </p>
+        ) : (
+          <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} />
+        )}
         <button className="btn-primary">Start the interview</button>
       </form>
 

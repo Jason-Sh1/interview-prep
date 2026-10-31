@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { generateReport } from "@/lib/feedback";
 import { createMockSession, endMockSession, getMockSession } from "@/lib/mock";
+import { setRecordingConsent } from "@/lib/privacy";
 import { PROBLEM_BY_SLUG } from "@/lib/problems";
 
 const startSchema = z.object({
@@ -26,6 +27,8 @@ export async function startMockAction(form: FormData) {
     company: String(form.get("company") ?? ""),
     language: form.get("language"),
   });
+  // First mock: the consent checkbox comes with the form. createMockSession refuses without consent.
+  if (form.get("consent") === "on") await setRecordingConsent(user.id, true);
   const id = await createMockSession(user.id, {
     slug: p.slug,
     language: p.language,
