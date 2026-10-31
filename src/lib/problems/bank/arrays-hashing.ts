@@ -3,6 +3,31 @@ import type { Problem } from "../types";
 // A deterministic permutation of 0..n-1 (7919 is prime and coprime with 2000).
 const shuffledRange = (n: number) => Array.from({ length: n }, (_, i) => (i * 7919) % n);
 
+function bruteTopK(nums: number[], k: number): number[] {
+  const count = new Map<number, number>();
+  for (const x of nums) count.set(x, (count.get(x) ?? 0) + 1);
+  return [...count.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, k)
+    .map(([v]) => v);
+}
+
+function bruteFirstMissing(nums: number[]): number {
+  const s = new Set(nums);
+  let x = 1;
+  while (s.has(x)) x++;
+  return x;
+}
+
+// Value v appears v + 1 times, in a scrambled order, so the top k is unique.
+const frequencyPile = (() => {
+  const flat: number[] = [];
+  for (let v = 0; v < 150; v++) for (let c = 0; c <= v; c++) flat.push(v);
+  return shuffledRange(flat.length).map((i) => flat[i]);
+})();
+const bigLetters = Array.from({ length: 3000 }, (_, i) => "abcdefghijklmnopqrstuvwxyz"[(i * 7 + (i >> 3)) % 26]).join("");
+const missingOne = shuffledRange(2000).map((x) => (x === 1233 ? -1 : x + 1));
+
 export const arraysHashing: Problem[] = [
   {
     slug: "pair-with-target-sum",
@@ -220,6 +245,205 @@ Return the length of the longest run. Duplicate values count only once. Aim for 
     best = Math.max(best, y - x + 1);
   }
   return best;
+}`,
+  },
+  {
+    slug: "repeat-spotter",
+    title: "Repeat Spotter",
+    pattern: "arrays-hashing",
+    difficulty: "easy",
+    rating: 900,
+    statement: `You are given an array of integers \`nums\`. Return \`true\` if some value shows up in it at least twice, and \`false\` if every value is different.`,
+    constraints: ["1 <= nums.length <= 10^5", "-10^9 <= nums[i] <= 10^9"],
+    hints: [
+      "Comparing every pair works but is quadratic. What structure tells you in O(1) whether you have seen a value before?",
+      "Scan once and keep a hash set of values seen so far. The moment you meet a value already in the set, you can stop.",
+      "seen = set()\nfor x in nums:\n    if x in seen: return True\n    seen.add(x)\nreturn False",
+    ],
+    complexity: { time: "O(n)", space: "O(n)" },
+    signature: {
+      kind: "function",
+      name: "containsDuplicate",
+      params: [{ name: "nums", type: "int[]" }],
+      returns: "bool",
+    },
+    tests: [
+      { input: [[1, 2, 3, 1]], expected: true, sample: true },
+      { input: [[1, 2, 3, 4]], expected: false, sample: true },
+      { input: [[7]], expected: false, label: "single element" },
+      { input: [[0, 0]], expected: true, label: "two equal" },
+      { input: [[-1, -2, -1]], expected: true, label: "negatives" },
+      { input: [[1, 1, 1, 3, 3, 4, 3, 2, 4, 2]], expected: true, label: "many repeats" },
+      { input: [[1000000000, -1000000000]], expected: false, label: "extreme values" },
+      { input: [shuffledRange(2000)], expected: false, label: "large distinct" },
+      { input: [[...shuffledRange(2000), 1999]], expected: true, label: "large with one repeat at the end" },
+    ],
+    companies: ["Amazon", "Apple", "Microsoft", "Google"],
+    source: { name: "LeetCode 217. Contains Duplicate", url: "https://leetcode.com/problems/contains-duplicate/" },
+    reference: `function containsDuplicate(nums) {
+  const seen = new Set();
+  for (const x of nums) {
+    if (seen.has(x)) return true;
+    seen.add(x);
+  }
+  return false;
+}`,
+  },
+  {
+    slug: "same-letters-rearranged",
+    title: "Same Letters, Rearranged",
+    pattern: "arrays-hashing",
+    difficulty: "easy",
+    rating: 1000,
+    statement: `Two words are rearrangements of each other when one can be turned into the other by reordering its letters, using every letter exactly as many times as it appears.
+
+Given two lowercase strings \`s\` and \`t\`, return \`true\` if \`t\` is a rearrangement of \`s\`, and \`false\` otherwise.`,
+    constraints: ["1 <= s.length, t.length <= 5 * 10^4", "s and t consist of lowercase English letters."],
+    hints: [
+      "Order does not matter, only how many times each letter appears.",
+      "If the lengths differ the answer is false. Otherwise count letters in s, subtract the counts for t, and check that every count ends at zero. A 26-slot array is enough.",
+      "if len(s) != len(t): return False\ncount = [0] * 26\nfor a, b in zip(s, t):\n    count[ord(a) - 97] += 1\n    count[ord(b) - 97] -= 1\nreturn all(c == 0 for c in count)",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "isAnagram",
+      params: [
+        { name: "s", type: "string" },
+        { name: "t", type: "string" },
+      ],
+      returns: "bool",
+    },
+    tests: [
+      { input: ["anagram", "nagaram"], expected: true, sample: true },
+      { input: ["rat", "car"], expected: false, sample: true },
+      { input: ["a", "a"], expected: true, label: "single letter" },
+      { input: ["ab", "a"], expected: false, label: "different lengths" },
+      { input: ["aacc", "ccac"], expected: false, label: "same letters, different counts" },
+      { input: ["listen", "silent"], expected: true, label: "classic pair" },
+      { input: ["aaab", "abaa"], expected: true, label: "repeated letter" },
+      { input: ["abc", "abc"], expected: true, label: "identical" },
+      { input: [bigLetters, bigLetters.split("").reverse().join("")], expected: true, label: "large input" },
+      { input: [bigLetters, bigLetters.slice(1) + "z"], expected: bigLetters[0] === "z", label: "large near miss" },
+    ],
+    companies: ["Amazon", "Bloomberg", "Microsoft", "Meta"],
+    source: { name: "LeetCode 242. Valid Anagram", url: "https://leetcode.com/problems/valid-anagram/" },
+    reference: `function isAnagram(s, t) {
+  if (s.length !== t.length) return false;
+  const count = new Array(26).fill(0);
+  for (let i = 0; i < s.length; i++) {
+    count[s.charCodeAt(i) - 97]++;
+    count[t.charCodeAt(i) - 97]--;
+  }
+  return count.every((c) => c === 0);
+}`,
+  },
+  {
+    slug: "most-common-k-values",
+    title: "Most Common K Values",
+    pattern: "arrays-hashing",
+    difficulty: "medium",
+    rating: 1300,
+    statement: `Given an integer array \`nums\` and an integer \`k\`, return the \`k\` values that occur most often in \`nums\`.
+
+The tests guarantee the answer is unique (there is no tie at the cut-off). You may return the values in any order. Try to beat O(n log n).`,
+    constraints: [
+      "1 <= nums.length <= 10^5",
+      "-10^4 <= nums[i] <= 10^4",
+      "1 <= k <= number of distinct values",
+      "The answer is unique.",
+    ],
+    hints: [
+      "First count how often each value appears. Then the question is about picking the k largest counts.",
+      "Counts are between 1 and n, so you can bucket values by count: bucket[c] holds the values seen c times. Walk the buckets from n down until you have k values. (A size-k heap also works in O(n log k).)",
+      "count = Counter(nums)\nbuckets = [[] for _ in range(len(nums) + 1)]\nfor v, c in count.items(): buckets[c].append(v)\nres = []\nfor c in range(len(nums), 0, -1):\n    for v in buckets[c]:\n        res.append(v)\n        if len(res) == k: return res",
+    ],
+    complexity: { time: "O(n)", space: "O(n)" },
+    signature: {
+      kind: "function",
+      name: "topKFrequent",
+      params: [
+        { name: "nums", type: "int[]" },
+        { name: "k", type: "int" },
+      ],
+      returns: "int[]",
+      compare: "unordered",
+    },
+    tests: [
+      { input: [[1, 1, 1, 2, 2, 3], 2], expected: [1, 2], sample: true },
+      { input: [[1], 1], expected: [1], sample: true },
+      { input: [[4, 4, -1, -1, -1, 2], 1], expected: [-1], label: "negatives" },
+      { input: [[5, 6, 7], 3], expected: [5, 6, 7], label: "k equals distinct count" },
+      { input: [[3, 0, 1, 0], 1], expected: [0], label: "zero is most common" },
+      { input: [[2, 2, 3, 3, 3, 1], 2], expected: [3, 2], label: "unsorted counts" },
+      { input: [[9, 9, 9, 9], 1], expected: [9], label: "all same" },
+      { input: [[1, 2, 2, 3, 3, 3, 4, 4, 4, 4], 3], expected: [4, 3, 2], label: "staircase counts" },
+      { input: [frequencyPile, 10], expected: bruteTopK(frequencyPile, 10), label: "large input" },
+    ],
+    companies: ["Amazon", "Meta", "Google", "Microsoft", "Uber"],
+    source: { name: "LeetCode 347. Top K Frequent Elements", url: "https://leetcode.com/problems/top-k-frequent-elements/" },
+    reference: `function topKFrequent(nums, k) {
+  const count = new Map();
+  for (const x of nums) count.set(x, (count.get(x) || 0) + 1);
+  const buckets = Array.from({ length: nums.length + 1 }, () => []);
+  for (const [v, c] of count) buckets[c].push(v);
+  const res = [];
+  for (let c = nums.length; c > 0 && res.length < k; c--) {
+    for (const v of buckets[c]) {
+      res.push(v);
+      if (res.length === k) break;
+    }
+  }
+  return res;
+}`,
+  },
+  {
+    slug: "smallest-absent-positive",
+    title: "Smallest Absent Positive",
+    pattern: "arrays-hashing",
+    difficulty: "hard",
+    rating: 1650,
+    statement: `Given an unsorted integer array \`nums\`, return the smallest positive integer (1, 2, 3, ...) that does not appear in it.
+
+Your solution should run in O(n) time and use only O(1) extra space; you may rearrange \`nums\` in place.`,
+    constraints: ["1 <= nums.length <= 10^5", "-2^31 <= nums[i] <= 2^31 - 1"],
+    hints: [
+      "With n numbers, the answer is always between 1 and n + 1. Values outside that range can be ignored.",
+      "Use the array itself as the hash set: keep swapping each value v in 1..n into slot v - 1 until the slot already holds v. Then the first slot i that does not hold i + 1 gives the answer.",
+      "n = len(nums)\nfor i in range(n):\n    while 1 <= nums[i] <= n and nums[nums[i] - 1] != nums[i]:\n        j = nums[i] - 1\n        nums[i], nums[j] = nums[j], nums[i]\nfor i in range(n):\n    if nums[i] != i + 1: return i + 1\nreturn n + 1",
+    ],
+    complexity: { time: "O(n)", space: "O(1)" },
+    signature: {
+      kind: "function",
+      name: "firstMissingPositive",
+      params: [{ name: "nums", type: "int[]" }],
+      returns: "int",
+    },
+    tests: [
+      { input: [[1, 2, 0]], expected: 3, sample: true },
+      { input: [[3, 4, -1, 1]], expected: 2, sample: true },
+      { input: [[7, 8, 9, 11, 12]], expected: 1, label: "all too large" },
+      { input: [[1]], expected: 2, label: "single one" },
+      { input: [[2]], expected: 1, label: "single non-one" },
+      { input: [[1, 1]], expected: 2, label: "duplicates" },
+      { input: [[-5, -3]], expected: 1, label: "all negative" },
+      { input: [[2, 3, 4, 5, 1]], expected: 6, label: "full permutation" },
+      { input: [[2147483647, -2147483648, 1, 2]], expected: 3, label: "extreme values" },
+      { input: [missingOne], expected: bruteFirstMissing(missingOne), label: "large with a gap" },
+      { input: [shuffledRange(2000).map((x) => x + 1)], expected: 2001, label: "large with no gap" },
+    ],
+    companies: ["Amazon", "Google", "Microsoft", "Meta", "Bloomberg"],
+    source: { name: "LeetCode 41. First Missing Positive", url: "https://leetcode.com/problems/first-missing-positive/" },
+    reference: `function firstMissingPositive(nums) {
+  const n = nums.length;
+  for (let i = 0; i < n; i++) {
+    while (nums[i] >= 1 && nums[i] <= n && nums[nums[i] - 1] !== nums[i]) {
+      const j = nums[i] - 1;
+      [nums[i], nums[j]] = [nums[j], nums[i]];
+    }
+  }
+  for (let i = 0; i < n; i++) if (nums[i] !== i + 1) return i + 1;
+  return n + 1;
 }`,
   },
 ];
