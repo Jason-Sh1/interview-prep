@@ -1,9 +1,11 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth/client";
+import { INVITE_HEADER } from "@/lib/auth/invite-header";
 
-export function SignInForm({ initialMode, github }: { initialMode: "signin" | "signup"; github: boolean }) {
+export function SignInForm({ initialMode, github, invite }: { initialMode: "signin" | "signup"; github: boolean; invite: boolean }) {
   const router = useRouter();
   const [mode, setMode] = useState(initialMode);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,12 @@ export function SignInForm({ initialMode, github }: { initialMode: "signin" | "s
     const password = String(form.get("password"));
     const res =
       mode === "signup"
-        ? await authClient.signUp.email({ email, password, name: String(form.get("name") || email.split("@")[0]) })
+        ? await authClient.signUp.email({
+            email,
+            password,
+            name: String(form.get("name") || email.split("@")[0]),
+            fetchOptions: { headers: { [INVITE_HEADER]: String(form.get("invite") ?? "") } },
+          })
         : await authClient.signIn.email({ email, password });
     setPending(false);
     if (res.error) {
@@ -53,12 +60,25 @@ export function SignInForm({ initialMode, github }: { initialMode: "signin" | "s
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
           />
         </div>
+        {mode === "signup" && invite && (
+          <div>
+            <label className="label" htmlFor="invite">Invite code</label>
+            <input className="input" id="invite" name="invite" required autoComplete="off" />
+            <p className="mt-1 text-xs text-muted">Sign-up is invite-only for now. Ask whoever shared this site with you.</p>
+          </div>
+        )}
+        {mode === "signup" && (
+          <p className="text-xs text-muted">
+            By creating an account you agree to how we handle your data, described in the{" "}
+            <Link href="/privacy" className="text-accent hover:underline">privacy page</Link>.
+          </p>
+        )}
         {error && <p className="text-sm text-bad">{error}</p>}
         <button className="btn-primary w-full" disabled={pending}>
           {pending ? "One moment…" : mode === "signup" ? "Create account" : "Sign in"}
         </button>
       </form>
-      {github && (
+      {github && !(mode === "signup" && invite) && (
         <button
           className="btn-secondary mt-3 w-full"
           onClick={() => authClient.signIn.social({ provider: "github", callbackURL: "/today" })}
