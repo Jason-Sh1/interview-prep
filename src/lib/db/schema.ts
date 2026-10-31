@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   date,
   index,
@@ -63,6 +64,34 @@ export const verification = pgTable("verification", {
   value: text("value").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Better Auth's rate limiter (rateLimit.storage = "database"), so sign-in and
+ * sign-up limits hold across serverless instances instead of per instance.
+ */
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// Privacy
+
+/**
+ * Per-user privacy choices. Mock interviews record a transcript of your voice
+ * (and your code), so they need explicit consent first; the version is the
+ * consent text's, so a materially changed text can ask again.
+ */
+export const privacySettings = pgTable("privacy_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  recordingConsentAt: timestamp("recording_consent_at"),
+  recordingConsentVersion: integer("recording_consent_version"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -224,6 +253,8 @@ export const mockSessions = pgTable(
     startedAt: timestamp("started_at").notNull().defaultNow(),
     endedAt: timestamp("ended_at"),
     finalCode: text("final_code"),
+    /** When the retention limit deleted its transcript, timeline and report. The row stays for counts. */
+    purgedAt: timestamp("purged_at"),
   },
   (t) => [index("mock_sessions_user_started_idx").on(t.userId, t.startedAt)],
 );
@@ -319,6 +350,8 @@ export const assistedSessions = pgTable(
     testResults: jsonb("test_results").$type<Record<string, unknown>>(),
     /** The AssistedReport from src/lib/assisted/grade.ts, once built. */
     report: jsonb("report").$type<Record<string, unknown>>(),
+    /** When the retention limit deleted its chat, files and report. */
+    purgedAt: timestamp("purged_at"),
   },
   (t) => [index("assisted_sessions_user_started_idx").on(t.userId, t.startedAt)],
 );
@@ -369,6 +402,8 @@ export const debugRounds = pgTable(
     testResults: jsonb("test_results").$type<{ passed: number; total: number; failing: string[]; passing?: string[] }>(),
     /** The DebugReport from src/lib/comprehension/grade.ts, once built. */
     report: jsonb("report").$type<Record<string, unknown>>(),
+    /** When the retention limit deleted its chat, files and answers. */
+    purgedAt: timestamp("purged_at"),
   },
   (t) => [index("debug_rounds_user_started_idx").on(t.userId, t.startedAt)],
 );
@@ -484,6 +519,8 @@ export const rounds = pgTable(
     endedAt: timestamp("ended_at"),
     /** The RoundReport from src/lib/rounds/types.ts, once built. */
     report: jsonb("report").$type<Record<string, unknown>>(),
+    /** When the retention limit deleted its transcript, whiteboard and report. */
+    purgedAt: timestamp("purged_at"),
   },
   (t) => [index("rounds_user_kind_idx").on(t.userId, t.kind, t.createdAt)],
 );

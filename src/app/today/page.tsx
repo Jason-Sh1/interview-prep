@@ -61,7 +61,12 @@ export default async function TodayPage({ searchParams }: PageProps<"/today">) {
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
       {welcome && (
         <div className="card mb-6 border-accent bg-accent-soft p-4 text-sm">
-          Your plan is ready. It re-plans after every attempt, so just work down the list.
+          <p className="font-medium">Your plan is ready.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+            <li>Work down the list from the top; each item says why it&apos;s there.</li>
+            <li>The plan re-plans after every attempt, so a missed day just shifts things along.</li>
+            <li>A few times a week, try a Mock interview; its feedback comes back here as drills.</li>
+          </ul>
         </div>
       )}
       {/* Always while it's under way; if never opened, only early on, since real history calibrates the track anyway. */}

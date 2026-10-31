@@ -42,6 +42,8 @@ async function build(session: MockSession): Promise<StoredReport> {
   const existing = await getReport(session.id);
   if (existing) return existing;
   if (!session.endedAt) throw new Error("The interview hasn't ended yet");
+  // The retention limit deleted the timeline; rebuilding from nothing would be a wrong report.
+  if (session.purgedAt) throw new Error("This interview's recording was deleted");
   const problem = PROBLEM_BY_SLUG.get(session.problemSlug);
   if (!problem) throw new Error("Unknown problem");
 

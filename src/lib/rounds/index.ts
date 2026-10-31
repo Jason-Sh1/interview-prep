@@ -3,6 +3,7 @@ import "server-only";
 // behavioral, code walkthrough): create and load rounds, save the artifact,
 // run interviewer turns (Claude or scripted), finish, and build the report.
 
+import { ConsentRequiredError, hasRecordingConsent } from "../privacy";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "../db";
@@ -28,6 +29,8 @@ export interface Round {
   startedAt: Date | null;
   endedAt: Date | null;
   report: RoundReport | null;
+  /** Set when the retention limit deleted the recording. */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.rounds.$inferSelect;
@@ -45,6 +48,7 @@ const fromRow = (r: Row): Round => ({
   startedAt: r.startedAt,
   endedAt: r.endedAt,
   report: (r.report as unknown as RoundReport) ?? null,
+  purgedAt: r.purgedAt,
 });
 
 /** Slack past the time box for a last turn in flight and clock drift. */
@@ -67,6 +71,8 @@ export async function createRound(userId: string, kind: RoundKind, topicId: stri
   await ensureMigrated();
   const def = kindDef(kind);
   if (!def || !def.topics.some((t) => t.id === topicId)) throw new Error("Unknown round topic");
+  // A round records a transcript of the candidate's voice, so it needs consent first.
+  if (!(await hasRecordingConsent(userId))) throw new ConsentRequiredError();
   const id = randomUUID();
   await db.insert(schema.rounds).values({
     id,
@@ -250,6 +256,7 @@ export function generateRoundReport(round: Round): Promise<RoundReport> {
 async function buildReport(id: string): Promise<RoundReport> {
   const [row] = await db.select().from(schema.rounds).where(eq(schema.rounds.id, id));
   if (!row?.endedAt) throw new Error("The round hasn't ended yet");
+  if (row.purgedAt) throw new Error("This round's recording was deleted");
   if (row.report) return row.report as unknown as RoundReport;
   const round = fromRow(row);
   const def = defFor(round);

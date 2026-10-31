@@ -1,4 +1,5 @@
 "use server";
+import { setRecordingConsent } from "@/lib/privacy";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
@@ -31,6 +32,8 @@ export async function startRoundAction(form: FormData) {
     company: form.get("company") ?? "",
   });
   if (!kindDef(p.kind)) throw new Error("That round isn't available yet");
+  // First round: the consent checkbox comes with the form. createRound refuses without consent.
+  if (form.get("consent") === "on") await setRecordingConsent(user.id, true);
   const goals = await getGoals(user.id);
   const id = await createRound(user.id, p.kind, p.topic, { minutes: p.minutes, persona: p.persona, company: p.company, level: goals?.level ?? "mid" });
   redirect(`${ROUND_INFO[p.kind].path}/${id}`);

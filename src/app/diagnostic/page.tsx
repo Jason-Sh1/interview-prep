@@ -1,26 +1,31 @@
 import Link from "next/link";
 import { Tag } from "@/components/badges";
+import { OnboardingSteps } from "@/components/OnboardingSteps";
+import { RecordingConsent } from "@/components/RecordingConsent";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { getDiagnostic, type Diagnostic } from "@/lib/diagnostic";
 import { DIAGNOSTIC_MINUTES, DIAGNOSTIC_MOCK, type DiagnosticResult } from "@/lib/diagnostic/plan";
 import { RUBRIC, RUBRIC_INFO } from "@/lib/feedback/analyze";
 import { fmtClock } from "@/lib/interview/timeline";
+import { mockCapabilities } from "@/lib/mock";
+import { getPrivacy } from "@/lib/privacy";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { finishDiagnosticAction, skipDiagnosticAction, startDiagnosticAction, startDiagnosticMockAction } from "./actions";
 
 export default async function DiagnosticPage() {
   const { user } = await requireOnboardedUser();
-  const d = await getDiagnostic(user.id);
+  const [d, privacy] = await Promise.all([getDiagnostic(user.id), getPrivacy(user.id)]);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
+      {!d?.completedAt && !d?.skipped && <OnboardingSteps current={2} />}
       <h1 className="text-2xl font-semibold">Starting diagnostic</h1>
       {!d || d.skipped ? (
         <Intro skipped={!!d?.skipped} />
       ) : d.completedAt && d.result ? (
         <Result result={d.result} />
       ) : (
-        <Steps d={d} />
+        <Steps d={d} consented={privacy.recordingConsent} />
       )}
     </main>
   );
@@ -64,7 +69,8 @@ function Intro({ skipped }: { skipped: boolean }) {
   );
 }
 
-function Steps({ d }: { d: Diagnostic }) {
+function Steps({ d, consented }: { d: Diagnostic; consented: boolean }) {
+  const caps = mockCapabilities();
   const problemsDone = d.steps.every((s) => s.attempt);
   const mockDone = d.mock.reported;
   return (
@@ -97,12 +103,20 @@ function Steps({ d }: { d: Diagnostic }) {
             <Link href={`/mock/${d.mock.sessionId}`} className="btn-secondary">
               {d.mock.ended ? "See the report" : "Continue"}
             </Link>
-          ) : (
+          ) : consented ? (
             <form action={startDiagnosticMockAction}>
               <button className="btn-secondary">Start the mock</button>
             </form>
-          )}
+          ) : null}
         </li>
+        {!d.mock.sessionId && !consented && (
+          <li>
+            <form action={startDiagnosticMockAction} className="space-y-3">
+              <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} />
+              <button className="btn-secondary">Start the mock</button>
+            </form>
+          </li>
+        )}
       </ol>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">

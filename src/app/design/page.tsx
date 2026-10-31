@@ -1,9 +1,11 @@
 import { Tag } from "@/components/badges";
+import { RecordingConsent } from "@/components/RecordingConsent";
 import { PastRounds } from "@/components/rounds/PastRounds";
 import { RoundSetup } from "@/components/rounds/RoundSetup";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { DESIGN_TOPIC_BY_ID, DESIGN_TOPICS } from "@/lib/design/topics";
 import { claudeEnabled } from "@/lib/interview/claude";
+import { getPrivacy } from "@/lib/privacy";
 import { listRounds } from "@/lib/rounds";
 
 const LEVEL_LABEL = { any: "Any level", mid: "Mid-level+", senior: "Senior+" } as const;
@@ -11,7 +13,7 @@ const LEVEL_ORDER: Record<string, number> = { "new-grad": 0, mid: 1, senior: 2, 
 
 export default async function DesignPage() {
   const { user, goals } = await requireOnboardedUser();
-  const rounds = await listRounds(user.id, "design");
+  const [rounds, privacy] = await Promise.all([listRounds(user.id, "design"), getPrivacy(user.id)]);
   const done = new Set(rounds.filter((r) => r.endedAt).map((r) => r.topicId));
   const lvl = LEVEL_ORDER[goals.level] ?? 1;
   // Prompts at your level first, then ones you haven't done.
@@ -41,6 +43,12 @@ export default async function DesignPage() {
         </p>
       </div>
 
+      {!privacy.recordingConsent && (
+        <div className="mt-6">
+          <RecordingConsent claude={claudeEnabled()} livekit={false} checkbox={false} what="design round" />
+        </div>
+      )}
+
       <h2 className="mt-8 text-lg font-semibold">Pick a prompt</h2>
       <ul className="mt-3 space-y-3">
         {topics.map((t) => (
@@ -52,7 +60,7 @@ export default async function DesignPage() {
             </div>
             <p className="mt-1 text-sm">{t.summary}</p>
             <p className="mt-1 text-xs text-muted">Asked at: {t.companies.join(", ")}</p>
-            <RoundSetup kind="design" topic={t.id} targets={goals.targetCompanies} />
+            <RoundSetup kind="design" topic={t.id} targets={goals.targetCompanies} needsConsent={!privacy.recordingConsent} />
           </li>
         ))}
       </ul>

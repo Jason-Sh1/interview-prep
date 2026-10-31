@@ -11,6 +11,7 @@ export function RoundSetup({
   defaultMinutes = 45,
   extra,
   label = "Start",
+  needsConsent = false,
 }: {
   kind: RoundKind;
   topic: string;
@@ -19,6 +20,8 @@ export function RoundSetup({
   defaultMinutes?: number;
   extra?: React.ReactNode;
   label?: string;
+  /** No recording consent yet: a required checkbox (the page explains what's recorded). */
+  needsConsent?: boolean;
 }) {
   const companies = [...COMPANIES].sort((a, b) => Number(targets.includes(b.id)) - Number(targets.includes(a.id)));
   return (
@@ -46,6 +49,12 @@ export function RoundSetup({
           </option>
         ))}
       </select>
+      {needsConsent && (
+        <label className="flex items-center gap-1.5 text-xs">
+          <input type="checkbox" name="consent" required />
+          I agree to recording (see above)
+        </label>
+      )}
       <button className="btn-primary">{label}</button>
     </form>
   );

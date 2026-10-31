@@ -18,6 +18,18 @@ export default async function DesignRoundPage({ params }: PageProps<"/design/[id
   if (!round || round.kind !== "design") notFound();
   const topic = DESIGN_TOPIC_BY_ID.get(round.topicId);
   if (!topic) notFound();
+  if (round.purgedAt) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-4 py-10">
+        <h1 className="text-2xl font-semibold">{topic.title}</h1>
+        <div className="card mt-6 p-4 text-sm text-muted">
+          This round&apos;s transcript, whiteboard and report were deleted on{" "}
+          {round.purgedAt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}, under the retention limit or at your
+          request.
+        </div>
+      </main>
+    );
+  }
   const parsed = designArtifactSchema.safeParse(round.artifact);
   const artifact = parsed.success ? parsed.data : emptyDesignArtifact();
 
