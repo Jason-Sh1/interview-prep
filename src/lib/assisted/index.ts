@@ -242,9 +242,12 @@ async function buildReport(session: AssistedSession): Promise<AssistedReport> {
       console.error("Claude grading failed; using the rule-based report", e);
     }
   }
-  await db
+  // Not into a round whose recording was deleted while it was being graded.
+  const [saved] = await db
     .update(schema.assistedSessions)
     .set({ report: report as unknown as Record<string, unknown> })
-    .where(eq(schema.assistedSessions.id, session.id));
+    .where(and(eq(schema.assistedSessions.id, session.id), isNull(schema.assistedSessions.purgedAt)))
+    .returning({ id: schema.assistedSessions.id });
+  if (!saved) throw new Error("This round's recording was deleted");
   return report;
 }

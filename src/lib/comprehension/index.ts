@@ -168,6 +168,12 @@ async function buildReport(round: DebugRound): Promise<DebugReport> {
       console.error("Claude grading failed; using the rule-based report", e);
     }
   }
-  await db.update(schema.debugRounds).set({ report: report as unknown as Record<string, unknown> }).where(eq(schema.debugRounds.id, round.id));
+  // Not into a round whose recording was deleted while it was being graded.
+  const [saved] = await db
+    .update(schema.debugRounds)
+    .set({ report: report as unknown as Record<string, unknown> })
+    .where(and(eq(schema.debugRounds.id, round.id), isNull(schema.debugRounds.purgedAt)))
+    .returning({ id: schema.debugRounds.id });
+  if (!saved) throw new Error("This round's recording was deleted");
   return report;
 }

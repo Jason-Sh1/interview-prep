@@ -8,6 +8,7 @@ import { COMPANY_BY_ID } from "../engine/companies";
 import { claudeEnabled } from "../interview/claude";
 import { getEvents, type MockSession } from "../mock";
 import { PROBLEM_BY_SLUG } from "../problems";
+import { scrubPurgedMocks } from "../privacy";
 import { applyMockFeedback, getGoals } from "../track";
 import { analyzeSession, fromStart, type FeedbackReport } from "./analyze";
 import { claudeReport } from "./claude";
@@ -43,7 +44,7 @@ async function build(session: MockSession): Promise<StoredReport> {
   if (existing) return existing;
   if (!session.endedAt) throw new Error("The interview hasn't ended yet");
   // The retention limit deleted the timeline; rebuilding from nothing would be a wrong report.
-  if (session.purgedAt) throw new Error("This interview's recording was deleted");
+  if (session.purgedAt) throw new Error(DELETED);
   const problem = PROBLEM_BY_SLUG.get(session.problemSlug);
   if (!problem) throw new Error("Unknown problem");
 
@@ -63,6 +64,10 @@ async function build(session: MockSession): Promise<StoredReport> {
 
   if (offset) report = { ...report, startOffsetMs: offset };
 
+  // The recording may have been deleted while the report was being written
+  // (grading can take a while): don't store a report quoting it.
+  if (await purgedNow(session.id)) throw new Error(DELETED);
+
   // Insert first so the track is only changed by the request that created the report.
   const [inserted] = await db
     .insert(schema.feedbackReports)
@@ -76,5 +81,19 @@ async function build(session: MockSession): Promise<StoredReport> {
     .update(schema.feedbackReports)
     .set({ trackChanges: trackChanges as unknown as Record<string, unknown>[] })
     .where(eq(schema.feedbackReports.sessionId, session.id));
+  // A purge that ran after the check above has already deleted this report, but
+  // the drills were written after it: remove both again. (Every later purge
+  // also clears anything left on a purged session.)
+  if (await purgedNow(session.id)) {
+    await scrubPurgedMocks({ sessionId: session.id });
+    throw new Error(DELETED);
+  }
   return { report, trackChanges, createdAt: inserted.createdAt };
+}
+
+const DELETED = "This interview's recording was deleted";
+
+async function purgedNow(sessionId: string): Promise<boolean> {
+  const [row] = await db.select({ purgedAt: schema.mockSessions.purgedAt }).from(schema.mockSessions).where(eq(schema.mockSessions.id, sessionId));
+  return !!row?.purgedAt;
 }

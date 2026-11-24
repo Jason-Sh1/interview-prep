@@ -10,7 +10,8 @@ import "server-only";
 // speech is turned into text by the browser or by LiveKit, and only the text
 // is kept.
 
-import { and, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { isSingleUser, LOCAL_USER } from "./auth/mode";
 import { db, ensureMigrated, schema } from "./db";
 import { RUBRIC, RUBRIC_INFO } from "./feedback/analyze";
@@ -74,68 +75,67 @@ export interface PurgeCounts {
  * A session still open is ended in the same step (dated now), so it can't go
  * on recording into the emptied row: every write path refuses ended sessions,
  * and the append helpers also refuse purged ones for writes already in flight.
+ *
+ * Each session is marked purged first and its content deleted after, and every
+ * run deletes whatever content is still attached to any purged session (of
+ * that user, with `userId`). So a run that was interrupted halfway, or a report
+ * that was still being generated when the purge ran and was written after it,
+ * is removed by the next run; until then the session counts as deleted and no
+ * report can be built from it.
  */
 export async function purgeRecordings(opts: { before?: Date; userId?: string }, now = new Date()): Promise<PurgeCounts> {
   await ensureMigrated();
   const m = schema.mockSessions;
   const a = schema.assistedSessions;
   const d = schema.debugRounds;
+  const r = schema.rounds;
+  const endedNow = (col: AnyPgColumn) => sql`coalesce(${col}, ${now.toISOString()}::timestamp)`;
 
   const mockIds = (
     await db
       .select({ id: m.id })
       .from(m)
       .where(and(isNull(m.purgedAt), opts.before ? lt(m.startedAt, opts.before) : undefined, opts.userId ? eq(m.userId, opts.userId) : undefined))
-  ).map((r) => r.id);
+  ).map((x) => x.id);
   if (mockIds.length) {
-    await db.delete(schema.sessionEvents).where(inArray(schema.sessionEvents.sessionId, mockIds));
-    await db.delete(schema.feedbackReports).where(inArray(schema.feedbackReports.sessionId, mockIds));
-    // A mock's drills stay in the plan (the area and the problem to practice it on), but their
-    // title and advice were written from the transcript, so they become the rubric's generic text.
-    for (const area of RUBRIC) {
-      await db
-        .update(schema.drills)
-        .set({ title: RUBRIC_INFO[area].label, drill: RUBRIC_INFO[area].help })
-        .where(and(inArray(schema.drills.sessionId, mockIds), eq(schema.drills.area, area)));
-    }
-    await db
-      .update(schema.drills)
-      .set({ title: "Practice", drill: "Work on this problem." })
-      .where(and(inArray(schema.drills.sessionId, mockIds), notInArray(schema.drills.area, [...RUBRIC])));
     await db
       .update(m)
-      .set({ finalCode: null, interviewerState: {}, endedAt: sql`coalesce(${m.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
-      .where(inArray(m.id, mockIds));
+      .set({ finalCode: null, interviewerState: {}, endedAt: endedNow(m.endedAt), purgedAt: now })
+      .where(and(inArray(m.id, mockIds), isNull(m.purgedAt)));
   }
+  await scrubPurgedMocks({ userId: opts.userId });
 
   const assistedIds = (
     await db
       .select({ id: a.id })
       .from(a)
       .where(and(isNull(a.purgedAt), opts.before ? lt(a.startedAt, opts.before) : undefined, opts.userId ? eq(a.userId, opts.userId) : undefined))
-  ).map((r) => r.id);
+  ).map((x) => x.id);
   if (assistedIds.length) {
-    await db.delete(schema.assistedEvents).where(inArray(schema.assistedEvents.sessionId, assistedIds));
     await db
       .update(a)
-      .set({ finalFiles: null, explanation: null, report: null, assistantState: {}, endedAt: sql`coalesce(${a.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
-      .where(inArray(a.id, assistedIds));
+      .set({ finalFiles: null, explanation: null, report: null, assistantState: {}, endedAt: endedNow(a.endedAt), purgedAt: now })
+      .where(and(inArray(a.id, assistedIds), isNull(a.purgedAt)));
   }
+  const purgedAssisted = db
+    .select({ id: a.id })
+    .from(a)
+    .where(and(isNotNull(a.purgedAt), opts.userId ? eq(a.userId, opts.userId) : undefined));
+  await db.delete(schema.assistedEvents).where(inArray(schema.assistedEvents.sessionId, purgedAssisted));
 
   const debugIds = (
     await db
       .select({ id: d.id })
       .from(d)
       .where(and(isNull(d.purgedAt), opts.before ? lt(d.startedAt, opts.before) : undefined, opts.userId ? eq(d.userId, opts.userId) : undefined))
-  ).map((r) => r.id);
+  ).map((x) => x.id);
   if (debugIds.length) {
     await db
       .update(d)
-      .set({ files: null, chat: [], answers: null, notes: null, report: null, endedAt: sql`coalesce(${d.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
-      .where(inArray(d.id, debugIds));
+      .set({ files: null, chat: [], answers: null, notes: null, report: null, endedAt: endedNow(d.endedAt), purgedAt: now })
+      .where(and(inArray(d.id, debugIds), isNull(d.purgedAt)));
   }
 
-  const r = schema.rounds;
   const roundIds = (
     await db
       .select({ id: r.id })
@@ -145,12 +145,50 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
   if (roundIds.length) {
     await db
       .update(r)
-      .set({ transcript: [], artifact: {}, stage: {}, report: null, endedAt: sql`coalesce(${r.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
-      .where(inArray(r.id, roundIds));
+      .set({ transcript: [], artifact: {}, stage: {}, report: null, endedAt: endedNow(r.endedAt), purgedAt: now })
+      .where(and(inArray(r.id, roundIds), isNull(r.purgedAt)));
   }
+
+  // Report builders only write to sessions that aren't purged, so these find
+  // nothing unless a report slipped in some other way; they're cheap to run.
+  const u = opts.userId;
+  await db.update(a).set({ report: null }).where(and(isNotNull(a.purgedAt), isNotNull(a.report), u ? eq(a.userId, u) : undefined));
+  await db.update(d).set({ report: null }).where(and(isNotNull(d.purgedAt), isNotNull(d.report), u ? eq(d.userId, u) : undefined));
+  await db.update(r).set({ report: null }).where(and(isNotNull(r.purgedAt), isNotNull(r.report), u ? eq(r.userId, u) : undefined));
 
   return { mockSessions: mockIds.length, assistedSessions: assistedIds.length, debugRounds: debugIds.length, rounds: roundIds.length };
 }
+
+/**
+ * Deletes the timeline and report of every purged mock (one user's, or one
+ * session's, when given), and turns the wording of their drills into the
+ * rubric's generic text. Drills stay in the plan (the area and the problem to
+ * practice it on), but their title and advice were written from the transcript.
+ * Rows already scrubbed aren't written again.
+ */
+export async function scrubPurgedMocks(scope: { userId?: string; sessionId?: string } = {}): Promise<void> {
+  const m = schema.mockSessions;
+  const dr = schema.drills;
+  const purged = db
+    .select({ id: m.id })
+    .from(m)
+    .where(and(isNotNull(m.purgedAt), scope.userId ? eq(m.userId, scope.userId) : undefined, scope.sessionId ? eq(m.id, scope.sessionId) : undefined));
+  await db.delete(schema.sessionEvents).where(inArray(schema.sessionEvents.sessionId, purged));
+  await db.delete(schema.feedbackReports).where(inArray(schema.feedbackReports.sessionId, purged));
+  for (const area of RUBRIC) {
+    const { label, help } = RUBRIC_INFO[area];
+    await db
+      .update(dr)
+      .set({ title: label, drill: help })
+      .where(and(inArray(dr.sessionId, purged), eq(dr.area, area), or(ne(dr.title, label), ne(dr.drill, help))));
+  }
+  await db
+    .update(dr)
+    .set({ title: GENERIC_DRILL.title, drill: GENERIC_DRILL.drill })
+    .where(and(inArray(dr.sessionId, purged), notInArray(dr.area, [...RUBRIC]), or(ne(dr.title, GENERIC_DRILL.title), ne(dr.drill, GENERIC_DRILL.drill))));
+}
+
+const GENERIC_DRILL = { title: "Practice", drill: "Work on this problem." };
 
 /** The daily retention job: purges recordings older than the limit. */
 export function purgeExpired(now = new Date(), days = retentionDays()): Promise<PurgeCounts> {
