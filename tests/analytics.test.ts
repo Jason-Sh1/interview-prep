@@ -27,7 +27,7 @@ describe("weekly usage stats", () => {
     expect(weeks[2]).toEqual({
       weekStart: "2026-10-26",
       activeUsers: 2,
-      completed: { practice: 2, mock: 1, assisted: 0, debug: 0, round: 0 },
+      completed: { practice: 2, mock: 1, assisted: 0, debug: 0, design: 0, behavioral: 0, walkthrough: 0 },
       sessionsCompleted: 1,
     });
     expect(weeks[1]).toMatchObject({ activeUsers: 1, sessionsCompleted: 1 });
@@ -69,20 +69,25 @@ describe("usage stats from the database", () => {
     ]);
     await db.insert(schema.assistedSessions).values({ id: "a1", userId: "ub", taskId: "rate-limit", minutes: 45, assistant: "scripted", startedAt: thisWeek, endedAt: thisWeek });
     await db.insert(schema.debugRounds).values({ id: "d1", userId: "uc", taskId: "checkout-bugs", minutes: 30, assistant: "none", startedAt: thisWeek, endedAt: thisWeek });
-    await db.insert(schema.rounds).values({ id: "r1", userId: "uc", kind: "design", topicId: "url-shortener", config: {}, interviewer: "scripted", createdAt: thisWeek, endedAt: thisWeek });
+    const round = { config: {}, interviewer: "scripted", createdAt: thisWeek, endedAt: thisWeek };
+    await db.insert(schema.rounds).values([
+      { ...round, id: "r1", userId: "uc", kind: "design", topicId: "url-shortener" },
+      { ...round, id: "r2", userId: "uc", kind: "behavioral", topicId: "amazon-lp" },
+    ]);
 
     const weeks = await usageStats(now, 2);
     expect(weeks.map((w) => w.weekStart)).toEqual(["2026-10-19", "2026-10-26"]);
     expect(weeks[1]).toEqual({
       weekStart: "2026-10-26",
       activeUsers: 3,
-      completed: { practice: 1, mock: 1, assisted: 1, debug: 1, round: 1 },
-      sessionsCompleted: 4,
+      // Behavioral rounds count as behavioral, not as system design.
+      completed: { practice: 1, mock: 1, assisted: 1, debug: 1, design: 1, behavioral: 1, walkthrough: 0 },
+      sessionsCompleted: 5,
     });
     expect(weeks[0]).toEqual({
       weekStart: "2026-10-19",
       activeUsers: 2,
-      completed: { practice: 1, mock: 1, assisted: 0, debug: 0, round: 0 },
+      completed: { practice: 1, mock: 1, assisted: 0, debug: 0, design: 0, behavioral: 0, walkthrough: 0 },
       sessionsCompleted: 1,
     });
   });

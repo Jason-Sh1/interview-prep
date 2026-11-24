@@ -1,4 +1,6 @@
 import { usageStats } from "@/lib/analytics-db";
+import { builtKinds } from "@/lib/rounds/registry";
+import { ROUND_INFO } from "@/lib/rounds/types";
 import { requireAdmin } from "@/lib/research/admin";
 
 // Usage at a glance for whoever runs the site (the research reviewers):
@@ -7,6 +9,8 @@ export default async function StatsPage() {
   await requireAdmin();
   const weeks = await usageStats();
   const latest = weeks.at(-1)!;
+  // One column per conversation round format that exists (system design, behavioral, ...).
+  const roundKinds = builtKinds();
   const max = Math.max(1, ...weeks.map((w) => Math.max(w.activeUsers, w.sessionsCompleted)));
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -17,7 +21,11 @@ export default async function StatsPage() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Stat label="Active users this week" value={latest.activeUsers} />
-        <Stat label="Sessions completed this week" value={latest.sessionsCompleted} hint="Mocks, AI-assisted, debugging and system design rounds" />
+        <Stat
+          label="Sessions completed this week"
+          value={latest.sessionsCompleted}
+          hint={`Mocks, AI-assisted, debugging and ${roundKinds.map((k) => ROUND_INFO[k].label.toLowerCase()).join(" and ")} rounds`}
+        />
         <Stat label="Practice attempts this week" value={latest.completed.practice} />
       </div>
 
@@ -31,7 +39,11 @@ export default async function StatsPage() {
             <th className="py-1 text-right font-normal">Mocks</th>
             <th className="py-1 text-right font-normal">AI-assisted</th>
             <th className="py-1 text-right font-normal">Debugging</th>
-            <th className="py-1 text-right font-normal">Design</th>
+            {roundKinds.map((k) => (
+              <th key={k} className="py-1 text-right font-normal">
+                {ROUND_INFO[k].label}
+              </th>
+            ))}
             <th className="py-1 text-right font-normal">Practice</th>
           </tr>
         </thead>
@@ -48,7 +60,11 @@ export default async function StatsPage() {
               <td className="py-1.5 text-right tabular-nums">{w.completed.mock}</td>
               <td className="py-1.5 text-right tabular-nums">{w.completed.assisted}</td>
               <td className="py-1.5 text-right tabular-nums">{w.completed.debug}</td>
-              <td className="py-1.5 text-right tabular-nums">{w.completed.round}</td>
+              {roundKinds.map((k) => (
+                <td key={k} className="py-1.5 text-right tabular-nums">
+                  {w.completed[k]}
+                </td>
+              ))}
               <td className="py-1.5 text-right tabular-nums">{w.completed.practice}</td>
             </tr>
           ))}

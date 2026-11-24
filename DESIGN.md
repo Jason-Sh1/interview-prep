@@ -46,7 +46,7 @@ Each entry: what we chose, what else we could have done, and why, in plain words
 
 ## Analytics: count from our own tables
 
-- **Choice:** an admin-only `/stats` page with weekly active users and sessions completed (mock interviews plus AI-assisted and debugging rounds; practice attempts listed separately) for the last eight weeks. It's computed from tables we already have: attempts, mock sessions and rounds.
+- **Choice:** an admin-only `/stats` page with weekly active users and sessions completed (mock interviews plus AI-assisted, debugging, system design and behavioral rounds, each counted under its own kind; practice attempts listed separately) for the last eight weeks. It's computed from tables we already have: attempts, mock sessions and rounds.
 - **Alternatives:** Google Analytics, Plausible or PostHog; an `events` table logging page views.
 - **Why:** the two questions we care about ("are people coming back each week?" and "are they finishing sessions?") are already answered by the data the app keeps to work at all. Third-party analytics would mean a script on every page, sending browsing data to another company, plus a cookie banner. A page-view log would be a new pile of personal data to protect and delete. The query reads only a user id, a time and whether a session ended, and the page shows totals only. One consequence: a deleted account's history drops out of past weeks' numbers. That's the privacy-respecting behavior, and it's fine at club scale.
 

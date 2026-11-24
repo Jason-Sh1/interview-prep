@@ -5,7 +5,11 @@
 //
 // The bucketing is pure so it can be tested; lib/analytics-db.ts reads rows.
 
-export type ActivityKind = "practice" | "mock" | "assisted" | "debug" | "round";
+import { ROUND_KINDS, type RoundKind } from "./rounds/types";
+
+/** Conversation rounds count by their own kind (system design, behavioral, walkthrough). */
+export type ActivityKind = "practice" | "mock" | "assisted" | "debug" | RoundKind;
+export const ACTIVITY_KINDS: readonly ActivityKind[] = ["practice", "mock", "assisted", "debug", ...ROUND_KINDS];
 
 export interface Activity {
   userId: string;
@@ -20,7 +24,7 @@ export interface WeekStats {
   weekStart: string;
   activeUsers: number;
   completed: Record<ActivityKind, number>;
-  /** Mock interviews plus AI-assisted, debugging and conversation rounds finished. */
+  /** Everything finished except practice attempts: mocks, AI-assisted, debugging and conversation rounds. */
   sessionsCompleted: number;
 }
 
@@ -37,7 +41,10 @@ export function weekStart(d: Date): Date {
 export function weeklyStats(activity: Activity[], now: Date, weeks = 8): WeekStats[] {
   const current = weekStart(now).getTime();
   const starts = Array.from({ length: weeks }, (_, i) => current - (weeks - 1 - i) * 7 * DAY);
-  const buckets = starts.map(() => ({ users: new Set<string>(), completed: { practice: 0, mock: 0, assisted: 0, debug: 0, round: 0 } }));
+  const buckets = starts.map(() => ({
+    users: new Set<string>(),
+    completed: Object.fromEntries(ACTIVITY_KINDS.map((k) => [k, 0])) as Record<ActivityKind, number>,
+  }));
   for (const a of activity) {
     const i = starts.indexOf(weekStart(a.at).getTime());
     if (i === -1) continue;
@@ -48,6 +55,6 @@ export function weeklyStats(activity: Activity[], now: Date, weeks = 8): WeekSta
     weekStart: new Date(starts[i]).toISOString().slice(0, 10),
     activeUsers: b.users.size,
     completed: b.completed,
-    sessionsCompleted: b.completed.mock + b.completed.assisted + b.completed.debug + b.completed.round,
+    sessionsCompleted: ACTIVITY_KINDS.filter((k) => k !== "practice").reduce((n, k) => n + b.completed[k], 0),
   }));
 }
