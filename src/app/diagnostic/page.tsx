@@ -12,8 +12,9 @@ import { getPrivacy } from "@/lib/privacy";
 import { PATTERN_BY_ID } from "@/lib/problems/patterns";
 import { finishDiagnosticAction, skipDiagnosticAction, startDiagnosticAction, startDiagnosticMockAction } from "./actions";
 
-export default async function DiagnosticPage() {
+export default async function DiagnosticPage({ searchParams }: PageProps<"/diagnostic">) {
   const { user } = await requireOnboardedUser();
+  const { consent } = await searchParams;
   const [d, privacy] = await Promise.all([getDiagnostic(user.id), getPrivacy(user.id)]);
 
   return (
@@ -25,7 +26,7 @@ export default async function DiagnosticPage() {
       ) : d.completedAt && d.result ? (
         <Result result={d.result} />
       ) : (
-        <Steps d={d} consented={privacy.recordingConsent} />
+        <Steps d={d} consented={privacy.recordingConsent} consentMissing={consent === "required"} />
       )}
     </main>
   );
@@ -69,7 +70,7 @@ function Intro({ skipped }: { skipped: boolean }) {
   );
 }
 
-function Steps({ d, consented }: { d: Diagnostic; consented: boolean }) {
+function Steps({ d, consented, consentMissing }: { d: Diagnostic; consented: boolean; consentMissing: boolean }) {
   const caps = mockCapabilities();
   const problemsDone = d.steps.every((s) => s.attempt);
   const mockDone = d.mock.reported;
@@ -112,7 +113,7 @@ function Steps({ d, consented }: { d: Diagnostic; consented: boolean }) {
         {!d.mock.sessionId && !consented && (
           <li>
             <form action={startDiagnosticMockAction} className="space-y-3">
-              <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} />
+              <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} missing={consentMissing} />
               <button className="btn-secondary">Start the mock</button>
             </form>
           </li>

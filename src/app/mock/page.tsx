@@ -12,7 +12,7 @@ import { startMockAction } from "./actions";
 
 export default async function MockSetupPage({ searchParams }: PageProps<"/mock">) {
   const { user, goals } = await requireOnboardedUser();
-  const { problem: requested } = await searchParams;
+  const { problem: requested, consent } = await searchParams;
   const [{ plan }, sessions, privacy] = await Promise.all([getTrackState(user.id, goals), listMockSessions(user.id), getPrivacy(user.id)]);
   const caps = mockCapabilities();
 
@@ -111,7 +111,7 @@ export default async function MockSetupPage({ searchParams }: PageProps<"/mock">
             <Link href="/settings" className="text-accent hover:underline">Manage in Settings</Link>.
           </p>
         ) : (
-          <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} />
+          <RecordingConsent claude={caps.interviewer === "claude"} livekit={caps.voice === "livekit"} missing={consent === "required"} />
         )}
         <button className="btn-primary">Start the interview</button>
       </form>

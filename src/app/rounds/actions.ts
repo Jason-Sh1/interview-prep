@@ -3,6 +3,7 @@ import { setRecordingConsent } from "@/lib/privacy";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
+import { startOrAskConsent } from "@/lib/consent-redirect";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { PERSONAS } from "@/lib/interview/types";
 import { createRound, finishRound, generateRoundReport, getRound } from "@/lib/rounds";
@@ -35,7 +36,10 @@ export async function startRoundAction(form: FormData) {
   // First round: the consent checkbox comes with the form. createRound refuses without consent.
   if (form.get("consent") === "on") await setRecordingConsent(user.id, true);
   const goals = await getGoals(user.id);
-  const id = await createRound(user.id, p.kind, p.topic, { minutes: p.minutes, persona: p.persona, company: p.company, level: goals?.level ?? "mid" });
+  const id = await startOrAskConsent(
+    () => createRound(user.id, p.kind, p.topic, { minutes: p.minutes, persona: p.persona, company: p.company, level: goals?.level ?? "mid" }),
+    ROUND_INFO[p.kind].path,
+  );
   redirect(`${ROUND_INFO[p.kind].path}/${id}`);
 }
 

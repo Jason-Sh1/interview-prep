@@ -9,16 +9,24 @@ export function RecordingConsent({
   livekit,
   checkbox = true,
   what = "mock interview",
+  missing = false,
 }: {
   claude: boolean;
   livekit: boolean;
   /** Off where each start form carries its own small checkbox. */
   checkbox?: boolean;
   what?: string;
+  /** The last start was refused because consent wasn't given (?consent=required). */
+  missing?: boolean;
 }) {
   return (
     <div className="card space-y-2 border-accent p-4 text-sm">
       <p className="font-medium">Before your first {what}</p>
+      {missing && (
+        <p role="alert" className="text-bad">
+          Nothing was started: recording needs your agreement first. Read the points below, tick the box, and start again.
+        </p>
+      )}
       <ul className="list-disc space-y-1 pl-5 text-muted">
         <li>
           We save a <strong className="text-ink">text transcript</strong> of what you and the interviewer say, and your work (code and test runs, or

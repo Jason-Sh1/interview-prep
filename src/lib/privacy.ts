@@ -51,7 +51,7 @@ export async function setRecordingConsent(userId: string, granted: boolean, now 
 
 export class ConsentRequiredError extends Error {
   constructor() {
-    super("Mock interviews record a transcript; agree to recording first.");
+    super("Interviews record a transcript; agree to recording first.");
     this.name = "ConsentRequiredError";
   }
 }

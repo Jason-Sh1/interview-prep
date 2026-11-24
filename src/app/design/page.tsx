@@ -11,8 +11,9 @@ import { listRounds } from "@/lib/rounds";
 const LEVEL_LABEL = { any: "Any level", mid: "Mid-level+", senior: "Senior+" } as const;
 const LEVEL_ORDER: Record<string, number> = { "new-grad": 0, mid: 1, senior: 2, staff: 3 };
 
-export default async function DesignPage() {
+export default async function DesignPage({ searchParams }: PageProps<"/design">) {
   const { user, goals } = await requireOnboardedUser();
+  const { consent } = await searchParams;
   const [rounds, privacy] = await Promise.all([listRounds(user.id, "design"), getPrivacy(user.id)]);
   const done = new Set(rounds.filter((r) => r.endedAt).map((r) => r.topicId));
   const lvl = LEVEL_ORDER[goals.level] ?? 1;
@@ -45,7 +46,7 @@ export default async function DesignPage() {
 
       {!privacy.recordingConsent && (
         <div className="mt-6">
-          <RecordingConsent claude={claudeEnabled()} livekit={false} checkbox={false} what="design round" />
+          <RecordingConsent claude={claudeEnabled()} livekit={false} checkbox={false} what="design round" missing={consent === "required"} />
         </div>
       )}
 
