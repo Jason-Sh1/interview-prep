@@ -10,7 +10,7 @@ import "server-only";
 // speech is turned into text by the browser or by LiveKit, and only the text
 // is kept.
 
-import { and, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./db";
 
 /** Bump when the consent text changes materially, so everyone is asked again. */
@@ -68,6 +68,10 @@ export interface PurgeCounts {
  * Deletes recordings, keeping a content-free row (problem, dates) so progress
  * counts and analytics still add up. With `before`, only sessions started
  * before then (the retention limit); with `userId`, only that user's.
+ *
+ * A session still open is ended in the same step (dated now), so it can't go
+ * on recording into the emptied row: every write path refuses ended sessions,
+ * and the append helpers also refuse purged ones for writes already in flight.
  */
 export async function purgeRecordings(opts: { before?: Date; userId?: string }, now = new Date()): Promise<PurgeCounts> {
   await ensureMigrated();
@@ -84,7 +88,10 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
   if (mockIds.length) {
     await db.delete(schema.sessionEvents).where(inArray(schema.sessionEvents.sessionId, mockIds));
     await db.delete(schema.feedbackReports).where(inArray(schema.feedbackReports.sessionId, mockIds));
-    await db.update(m).set({ finalCode: null, interviewerState: {}, purgedAt: now }).where(inArray(m.id, mockIds));
+    await db
+      .update(m)
+      .set({ finalCode: null, interviewerState: {}, endedAt: sql`coalesce(${m.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
+      .where(inArray(m.id, mockIds));
   }
 
   const assistedIds = (
@@ -97,7 +104,7 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
     await db.delete(schema.assistedEvents).where(inArray(schema.assistedEvents.sessionId, assistedIds));
     await db
       .update(a)
-      .set({ finalFiles: null, explanation: null, report: null, assistantState: {}, purgedAt: now })
+      .set({ finalFiles: null, explanation: null, report: null, assistantState: {}, endedAt: sql`coalesce(${a.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
       .where(inArray(a.id, assistedIds));
   }
 
@@ -110,7 +117,7 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
   if (debugIds.length) {
     await db
       .update(d)
-      .set({ files: null, chat: [], answers: null, notes: null, report: null, purgedAt: now })
+      .set({ files: null, chat: [], answers: null, notes: null, report: null, endedAt: sql`coalesce(${d.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
       .where(inArray(d.id, debugIds));
   }
 
@@ -122,7 +129,10 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
       .where(and(isNull(r.purgedAt), opts.before ? lt(r.createdAt, opts.before) : undefined, opts.userId ? eq(r.userId, opts.userId) : undefined))
   ).map((x) => x.id);
   if (roundIds.length) {
-    await db.update(r).set({ transcript: [], artifact: {}, stage: {}, report: null, purgedAt: now }).where(inArray(r.id, roundIds));
+    await db
+      .update(r)
+      .set({ transcript: [], artifact: {}, stage: {}, report: null, endedAt: sql`coalesce(${r.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
+      .where(inArray(r.id, roundIds));
   }
 
   return { mockSessions: mockIds.length, assistedSessions: assistedIds.length, debugRounds: debugIds.length, rounds: roundIds.length };

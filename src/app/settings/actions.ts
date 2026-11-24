@@ -11,8 +11,10 @@ export async function setConsentAction(form: FormData) {
   revalidatePath("/settings");
 }
 
-export async function deleteRecordingsAction() {
+/** Deletes every recording now. Needs the confirming checkbox ticked. */
+export async function deleteRecordingsAction(form: FormData) {
   const user = await requireUser();
+  if (form.get("confirm") !== "on") redirect("/settings?confirmRecordings=1");
   await purgeRecordings({ userId: user.id });
   redirect("/settings?deleted=recordings");
 }

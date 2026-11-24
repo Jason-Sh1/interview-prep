@@ -136,8 +136,11 @@ export async function getEvents(sessionId: string): Promise<SessionEvent[]> {
   });
 }
 
+/** Appends timeline events, unless the session's recording was deleted (then they're dropped). */
 export async function appendEvents(sessionId: string, events: SessionEvent[]): Promise<void> {
   if (!events.length) return;
+  const [s] = await db.select({ purgedAt: schema.mockSessions.purgedAt }).from(schema.mockSessions).where(eq(schema.mockSessions.id, sessionId));
+  if (s?.purgedAt) return;
   await db.insert(schema.sessionEvents).values(
     events.map((e) => ({ sessionId, t: e.t, type: e.type, payload: e.payload as Record<string, unknown> })),
   );
@@ -195,7 +198,10 @@ export async function* runTurn(session: MockSession, input: TurnInput, signal?: 
   const [row] = await db.select({ s: schema.mockSessions.interviewerState }).from(schema.mockSessions).where(eq(schema.mockSessions.id, session.id));
   const state = { ...INITIAL_SCRIPT_STATE, ...(row?.s as Partial<ScriptState>) };
   const scripted = scriptedTurn(state, { kind: input.kind, text: input.text, ctx, problem, config: session.config, companyName: companyName(session.config) });
-  await db.update(schema.mockSessions).set({ interviewerState: scripted.state as unknown as Record<string, unknown> }).where(eq(schema.mockSessions.id, session.id));
+  await db
+    .update(schema.mockSessions)
+    .set({ interviewerState: scripted.state as unknown as Record<string, unknown> })
+    .where(and(eq(schema.mockSessions.id, session.id), isNull(schema.mockSessions.purgedAt)));
 
   // Everything sent to the client is recorded, even when the turn is cut off
   // (a new turn aborts this one), so the transcript matches what was said.

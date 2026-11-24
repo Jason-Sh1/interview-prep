@@ -129,11 +129,14 @@ export async function saveArtifact(round: Round, artifact: unknown): Promise<voi
   round.artifact = parsed as Record<string, unknown>;
 }
 
+/** Not recorded once the round's recording was deleted (a turn already in flight). */
+const unpurged = (id: string) => and(eq(schema.rounds.id, id), isNull(schema.rounds.purgedAt));
+
 async function appendTurn(id: string, turn: Turn) {
   await db
     .update(schema.rounds)
     .set({ transcript: sql`${schema.rounds.transcript} || ${JSON.stringify([turn])}::jsonb` })
-    .where(eq(schema.rounds.id, id));
+    .where(unpurged(id));
 }
 
 /**
@@ -175,7 +178,7 @@ export async function* runRoundTurn(round: Round, input: TurnInput, signal?: Abo
     remainingMs: totalMs - now,
     state: row?.stage ?? {},
   });
-  await db.update(schema.rounds).set({ stage: scripted.state }).where(eq(schema.rounds.id, round.id));
+  await db.update(schema.rounds).set({ stage: scripted.state }).where(unpurged(round.id));
 
   let sent = "";
   let finished = false;

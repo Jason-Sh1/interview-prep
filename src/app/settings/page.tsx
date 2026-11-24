@@ -47,9 +47,14 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
           debugging rounds) are deleted
           automatically {days} days after the session. Your plan, ratings and solved problems stay until you delete your account.
         </p>
-        <form action={deleteRecordingsAction} className="mt-4">
+        <form action={deleteRecordingsAction} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="confirm" required />
+            Yes, delete every transcript, recording and report. Any interview in progress ends.
+          </label>
           <button className="btn-secondary">Delete all my recordings now</button>
         </form>
+        {params.confirmRecordings && <p className="mt-2 text-sm text-bad">Tick the box to confirm.</p>}
       </section>
 
       {!isSingleUser() && githubEnabled && (

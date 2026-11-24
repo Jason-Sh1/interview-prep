@@ -80,6 +80,19 @@ describe("start actions and recording consent", () => {
     expect(await redirectOf(startRoundAction(form({ ...design, consent: "on" })))).toMatch(/^\/design\/[0-9a-f-]{36}$/);
   });
 
+  it("only deletes recordings when the confirming box is ticked", async () => {
+    const { deleteRecordingsAction } = await import("@/app/settings/actions");
+    const { setRecordingConsent } = await import("@/lib/privacy");
+    const { createMockSession, getMockSession } = await import("@/lib/mock");
+    const user = await me();
+    await setRecordingConsent(user.id, true);
+    const id = await createMockSession(user.id, { slug: "pair-with-target-sum", language: "python", config: { persona: "neutral", minutes: 45, hintsAllowed: true, company: null } });
+    expect(await redirectOf(deleteRecordingsAction(form({})))).toBe("/settings?confirmRecordings=1");
+    expect((await getMockSession(id, user.id))!.purgedAt).toBeNull();
+    expect(await redirectOf(deleteRecordingsAction(form({ confirm: "on" })))).toBe("/settings?deleted=recordings");
+    expect((await getMockSession(id, user.id))!.purgedAt).toBeInstanceOf(Date);
+  });
+
   it("still surfaces other errors", async () => {
     const { startOrAskConsent } = await import("@/lib/consent-redirect");
     await expect(startOrAskConsent(() => Promise.reject(new Error("boom")), "/x")).rejects.toThrow("boom");

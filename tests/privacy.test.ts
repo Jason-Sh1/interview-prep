@@ -192,6 +192,49 @@ describe("privacy against the database", () => {
     for (const id of roundIds) expect((await db.select().from(schema.rounds).where(eq(schema.rounds.id, id)))[0].report).toBeNull();
   });
 
+  it("ends a session that is still open when its recording is purged, and records nothing more", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const { purgeRecordings, setRecordingConsent } = await import("@/lib/privacy");
+    const mock = await import("@/lib/mock");
+    const assisted = await import("@/lib/assisted");
+    const debug = await import("@/lib/comprehension");
+    const rounds = await import("@/lib/rounds");
+    const u = await newUser("open");
+    await setRecordingConsent(u.id, true);
+
+    const mId = await mock.createMockSession(u.id, { slug: "pair-with-target-sum", config, language: "python" });
+    const aId = await assisted.createAssistedSession(u.id, "rate-limit", 45);
+    const dId = await debug.createDebugRound(u.id, "checkout-bugs", 30, false);
+    const rId = await rounds.createRound(u.id, "design", "url-shortener", { minutes: 30, persona: "neutral", company: null, level: "mid" });
+    // Loaded before the purge, as a request already in flight would have them.
+    const staleMock = (await mock.getMockSession(mId, u.id))!;
+    const staleAssisted = (await assisted.getAssistedSession(aId, u.id))!;
+    const staleDebug = (await debug.getDebugRound(dId, u.id))!;
+    let staleRound = (await rounds.getRound(rId, u.id))!;
+    for await (const _ of rounds.runRoundTurn(staleRound, { kind: "start" })) void _;
+    staleRound = (await rounds.getRound(rId, u.id))!;
+
+    await purgeRecordings({ userId: u.id });
+
+    // Every row is ended, so the API routes (which check endedAt) refuse further writes.
+    expect((await mock.getMockSession(mId, u.id))!.endedAt).toBeInstanceOf(Date);
+    expect((await assisted.getAssistedSession(aId, u.id))!.endedAt).toBeInstanceOf(Date);
+    expect((await debug.getDebugRound(dId, u.id))!.endedAt).toBeInstanceOf(Date);
+    expect((await rounds.getRound(rId, u.id))!.endedAt).toBeInstanceOf(Date);
+
+    // Writes already in flight with a stale copy land nowhere.
+    await mock.appendEvents(mId, [{ type: "marker", t: 1, payload: { what: "start" } }]);
+    for await (const _ of mock.runTurn(staleMock, { kind: "utterance", text: "my secret plan", source: "typed" })) void _;
+    expect(await mock.getEvents(mId)).toEqual([]);
+    await assisted.chat(staleAssisted, { text: "write it for me", model: "scripted", files: {} });
+    expect(await assisted.getAssistedEvents(aId)).toEqual([]);
+    await debug.saveDebugProgress(staleDebug, { files: { "a.js": "mine" } });
+    expect((await db.select().from(schema.debugRounds).where(eq(schema.debugRounds.id, dId)))[0].files).toBeNull();
+    for await (const _ of rounds.runRoundTurn(staleRound, { kind: "say", text: "my design", source: "typed" })) void _;
+    expect((await db.select().from(schema.rounds).where(eq(schema.rounds.id, rId)))[0]).toMatchObject({ transcript: [], stage: {} });
+  });
+
   it("deletes every row a user has, and only theirs", async () => {
     const { db, schema } = await import("@/lib/db");
     const { eq } = await import("drizzle-orm");

@@ -104,8 +104,14 @@ export async function getAssistedEvents(sessionId: string): Promise<AssistedEven
   });
 }
 
+/** Appends events, unless the round's recording was deleted (then they're dropped). */
 export async function appendAssistedEvents(sessionId: string, events: AssistedEvent[]): Promise<void> {
   if (!events.length) return;
+  const [s] = await db
+    .select({ purgedAt: schema.assistedSessions.purgedAt })
+    .from(schema.assistedSessions)
+    .where(eq(schema.assistedSessions.id, sessionId));
+  if (s?.purgedAt) return;
   await db
     .insert(schema.assistedEvents)
     .values(events.map((e) => ({ sessionId, t: e.t, type: e.type, payload: e.payload as Record<string, unknown> })));
@@ -170,7 +176,7 @@ export async function chat(session: AssistedSession, input: { text: string; mode
     await db
       .update(schema.assistedSessions)
       .set({ assistantState: res.state as unknown as Record<string, unknown> })
-      .where(eq(schema.assistedSessions.id, session.id));
+      .where(and(eq(schema.assistedSessions.id, session.id), isNull(schema.assistedSessions.purgedAt)));
   }
   await appendAssistedEvents(session.id, [
     { type: "prompt", t: promptT, payload: { text: input.text, model } },
