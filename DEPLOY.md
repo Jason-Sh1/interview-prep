@@ -88,6 +88,17 @@ Without a key, every feature works with its scripted or rule-based fallback. Wit
 - Usage: `/stats` (admins) shows weekly active users and completed sessions.
 - The LiveKit voice agent (`agent/`) can't run on Vercel. Without it, mocks use the browser's voice, which is fine for most users.
 
+## 8. First deploy: things only a real deploy can confirm
+
+These haven't been observed yet, because nothing has been deployed. Check each one on the first deploy and fix this file if it's wrong.
+
+1. **Migrations are bundled.** The app reads `drizzle/` at startup; `next.config.ts` adds it to every function with `outputFileTracingIncludes`. On the first request, the function logs should show no `ENOENT` or "Can't find meta/_journal.json" error, and Neon's **Tables** view should list the app's tables and `drizzle.__drizzle_migrations`.
+2. **Two cold starts on an empty database.** Two servers starting at once can race on the first migration. The loser waits two seconds and retries once, and a failure isn't remembered, so the next request tries again. A single "Database migration failed; retrying once" warning is fine; repeated failures aren't.
+3. **What a startup error looks like.** With a required setting missing, `register()` throws "Missing production settings". How Vercel shows that (an error page, a 500, or only a log line) hasn't been seen. Try it once on a preview by leaving out `BETTER_AUTH_SECRET`.
+4. **The 300-second limit.** The research routes set `maxDuration = 300`, Hobby's maximum. After the first research run, open `/research` and note how many companies were researched and how many were "left for the next run". One company's research time hasn't been measured.
+5. **Retention without the cron job.** After a signed-in page load, the purge runs in `after()` at most once a day per server instance. When something has expired, the logs show `[retention] purged expired recordings`.
+6. **Rate limits see real client addresses.** In Neon, look at the `rate_limit` table after a few sign-ins from different networks: the keys should hold different IP addresses. If every key has the same address, the per-IP limit is acting as one limit for everyone.
+
 ## Settings reference
 
 Every setting, with what it does, is in [.env.example](.env.example). Required on Vercel: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (or the default Vercel domain). Strongly recommended: `SIGNUP_INVITE_CODE`, `CRON_SECRET` (without it the research job never runs; expired recordings are still deleted, by a once-a-day check when someone uses the site).
