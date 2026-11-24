@@ -193,6 +193,33 @@ describe("research job", () => {
     expect(news[0].sources[0].url).toBe("https://example.com/meta");
   });
 
+  it("fits a run in a time budget, oldest first, and the weekday cron skips companies done this week", async () => {
+    const r = await import("@/lib/research");
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    fake.fail.clear();
+    fake.changeMeta = false;
+    expect(r.researchBudgetMs({ VERCEL: "1" })).toBe(r.VERCEL_RESEARCH_BUDGET_MS);
+    expect(r.researchBudgetMs({})).toBeUndefined();
+
+    // Every check of the clock moves it 100 ms; with a 250 ms budget two companies start and the rest wait.
+    let ticks = 0;
+    const run = (await r.runResearch("cli", undefined, { budgetMs: 250, clock: () => 100 * ticks++ }))!;
+    const started = run.results.filter((x) => x.result !== "deferred");
+    expect(started).toHaveLength(2);
+    expect(run.results.filter((x) => x.result === "deferred")).toHaveLength(Object.keys(COMPANY_BY_ID).length - 2);
+    // Stripe failed in the last run, so it hadn't been researched and goes first.
+    expect(started.map((x) => x.companyId)).toContain("stripe");
+    expect(run.status).toBe("done");
+
+    // Everything was researched within the last 6 days, so the cron has nothing to do...
+    expect((await r.runResearch("cron", undefined, { skipFreshDays: 6 }))!.results).toEqual([]);
+    // ...until a company's last check is older than that.
+    await db.update(schema.companyProfiles).set({ verifiedAt: new Date(Date.now() - 8 * 86_400_000) }).where(eq(schema.companyProfiles.companyId, "google"));
+    expect((await r.runResearch("cron", undefined, { skipFreshDays: 6 }))!.results.map((x) => x.companyId)).toEqual(["google"]);
+    fake.changeMeta = true;
+  });
+
   it("skips without an API key", async () => {
     const r = await import("@/lib/research");
     const key = process.env.ANTHROPIC_API_KEY;

@@ -41,7 +41,7 @@ openssl rand -hex 6       # SIGNUP_INVITE_CODE (or pick a phrase you'll share wi
 
    Leave `AUTH_MODE` unset: on Vercel the app requires accounts by default. Leave `ANTHROPIC_API_KEY` unset for now (step 6).
 4. Click **Deploy**. When it finishes, open the site. If a required setting is missing, the function logs (Project → **Logs**) show a `Missing production settings` message naming it.
-5. Back in the project, open **Settings → Cron Jobs** and check both jobs are listed: `/api/cron/research` (Mondays) and `/api/cron/retention` (daily). They're read from `vercel.json`.
+5. Back in the project, open **Settings → Cron Jobs** and check both jobs are listed: `/api/cron/research` (weekday mornings) and `/api/cron/retention` (daily). They're read from `vercel.json`.
 6. Under **Settings → Functions**, set **Function Region** to the same region as the Neon database, then redeploy (Deployments → ⋯ → Redeploy).
 
 ## 4. Check it works
