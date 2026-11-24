@@ -6,6 +6,7 @@ import { nextCookies } from "better-auth/next-js";
 import { db, schema } from "../db";
 import { verifyEmailOnGitHubLink } from "./github-link";
 import { INVITE_HEADER, inviteCode, inviteOk } from "./invite";
+import { AUTH_RATE_LIMITS } from "./rate-limits";
 
 const invite = inviteCode();
 
@@ -41,13 +42,10 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true, minPasswordLength: 8 },
   socialProviders: github ? { github } : {},
   // On in production. Stored in Postgres so the limits hold across serverless
-  // instances; sign-in and sign-up get tighter limits against password guessing.
+  // instances; sign-in and sign-up have their own per-IP limits (rate-limits.ts).
   rateLimit: {
     storage: "database",
-    customRules: {
-      "/sign-in/email": { window: 60, max: 5 },
-      "/sign-up/email": { window: 3600, max: 10 },
-    },
+    customRules: { ...AUTH_RATE_LIMITS },
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {

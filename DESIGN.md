@@ -10,10 +10,11 @@ Each entry: what we chose, what else we could have done, and why, in plain words
 
 ## Accounts: Better Auth, invite-only, rate-limited in Postgres
 
-- **Choice:** email and password through Better Auth (already in the app), optional GitHub sign-in, an optional invite code (`SIGNUP_INVITE_CODE`), and rate limits on sign-in (5 per minute) and sign-up (10 per hour) stored in a `rate_limit` table.
+- **Choice:** email and password through Better Auth (already in the app), optional GitHub sign-in, an optional invite code (`SIGNUP_INVITE_CODE`), and per-IP rate limits on sign-in (30 per minute) and sign-up (60 per hour) stored in a `rate_limit` table.
 - **Alternatives:** open sign-up; an email allowlist; magic links; a hosted auth provider (Clerk, Auth0).
 - **Why:**
   - **Invite code instead of open sign-up:** every user can spend the owner's Claude budget ($20/month across all projects), so the site shouldn't be open to the whole internet. A shared code is the simplest gate for a club: no list of emails to maintain.
+  - **Limits sized for shared Wi-Fi:** club members often share one public IP (campus Wi-Fi, a meetup), so the limits let about forty people sign up in the same hour and sign in in the same minute. The invite code is what keeps strangers out of sign-up; the sign-in limit still caps password guessing from one address at 30 tries a minute.
   - **Rate limits in the database, not in memory:** on serverless, each instance has its own memory, so an in-memory limit is easy to get around by spreading requests across instances. A Postgres table is shared by every instance and costs one small write per auth request.
   - **Magic links** need an email-sending service, meaning another account and another secret.
   - **GitHub and the invite code:** a GitHub login can't carry an invite code, so with a code set, GitHub only signs in existing accounts. Admin pages need a GitHub-verified email, because anyone can register a password account with someone else's address. Better Auth won't silently attach a GitHub login to an unverified account (that would let an attacker pre-register your email). So the admin signs up with a password, then links GitHub from Settings while signed in. Better Auth only links when GitHub reports the same email and says it's verified, but it doesn't mark the local email verified until a later GitHub sign-in, so a small hook (`lib/auth/github-link.ts`) marks it verified when a GitHub login is linked to a password account.

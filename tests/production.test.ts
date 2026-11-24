@@ -107,6 +107,20 @@ describe("cron jobs", () => {
   });
 });
 
+describe("auth rate limits", () => {
+  it("let a club on one shared IP sign up and sign in together", async () => {
+    const { AUTH_RATE_LIMITS } = await import("@/lib/auth/rate-limits");
+    const perHour = (r: { window: number; max: number }) => (r.max * 3600) / r.window;
+    // Forty members at a kickoff, all behind the same campus address.
+    expect(AUTH_RATE_LIMITS["/sign-up/email"].max).toBeGreaterThanOrEqual(40);
+    expect(AUTH_RATE_LIMITS["/sign-up/email"].window).toBeLessThanOrEqual(3600);
+    expect(AUTH_RATE_LIMITS["/sign-in/email"].max).toBeGreaterThanOrEqual(30);
+    expect(AUTH_RATE_LIMITS["/sign-in/email"].window).toBeLessThanOrEqual(60);
+    // Still a limit on password guessing from one address.
+    expect(perHour(AUTH_RATE_LIMITS["/sign-in/email"])).toBeLessThanOrEqual(2000);
+  });
+});
+
 describe(".env.example", () => {
   it("documents every environment variable the app reads, with empty values", () => {
     const example = readFileSync(path.join(process.cwd(), ".env.example"), "utf8");
