@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { retentionDays, retentionSchedule } from "@/lib/privacy";
 
-// The consent checkbox shown inside a form that starts a mock interview, until
-// the user has agreed once. The server refuses to create a mock without consent
-// (lib/mock.ts), so this is the only way in. Withdraw any time in Settings.
+// The consent notice (and checkbox) shown with the forms that start a mock
+// interview, system design or behavioral round, until the user has agreed once.
+// The server refuses to start one without consent (createMockSession in
+// lib/mock.ts, createRound in lib/rounds), so this is the only way in.
+// Withdraw any time in Settings.
 export function RecordingConsent({
   claude,
   livekit,

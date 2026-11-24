@@ -16,7 +16,7 @@ npm run eval:feedback               # free: heuristic, plus Claude replayed if e
 npm run eval:feedback -- --record   # needs ANTHROPIC_API_KEY: records missing scenarios, then scores
 ```
 
-Recording all 24 on `claude-opus-5-5` costs about $2 (about 5k input and 3k output tokens each, at $4 and $20 per million). Each scenario is recorded once and then replayed for free.
+What recording all 24 on `claude-opus-5-5` costs is not measured yet: check the Anthropic console after the first `--record` run and write it in RESULTS.md. Each scenario is recorded once and then replayed for free.
 
 ## How a report becomes feedback points
 

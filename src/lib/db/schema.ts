@@ -82,8 +82,9 @@ export const rateLimit = pgTable("rate_limit", {
 // Privacy
 
 /**
- * Per-user privacy choices. Mock interviews record a transcript of your voice
- * (and your code), so they need explicit consent first; the version is the
+ * Per-user privacy choices. Mock interviews, system design and behavioral
+ * rounds record a transcript of your voice (and your work), so they need
+ * explicit consent first; the version is the
  * consent text's, so a materially changed text can ask again.
  */
 export const privacySettings = pgTable("privacy_settings", {

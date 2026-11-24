@@ -5,7 +5,7 @@
 //                                     recordings if there's a full set (free)
 //   npm run eval:feedback -- --record call Claude once per missing scenario and
 //                                     save the responses (needs ANTHROPIC_API_KEY;
-//                                     about $2 for all 24 on claude-opus-5-5)
+//                                     cost not measured yet; see the Anthropic console)
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { FEEDBACK_MODEL } from "../src/lib/feedback/claude";
@@ -41,7 +41,7 @@ async function main() {
   const dir = recordingsDir(FEEDBACK_MODEL);
   if (process.argv.includes("--record")) {
     const missing = missingRecordings(dir);
-    console.log(`Recording ${missing.length} scenarios with ${FEEDBACK_MODEL} (roughly $0.08 each).`);
+    console.log(`Recording ${missing.length} scenarios with ${FEEDBACK_MODEL}. This calls the API and costs money; check the console afterwards.`);
     await recordLive(dir, SCENARIOS.filter((s) => missing.includes(s.id)));
   }
 

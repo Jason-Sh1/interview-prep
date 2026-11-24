@@ -76,8 +76,8 @@ Without a key, every feature works with its scripted or rule-based fallback. Wit
 
 1. At [console.anthropic.com](https://console.anthropic.com): create a key, then under **Limits** set a **monthly spend limit** that fits the budget (for example $15, leaving room for evals). That limit is the real cap; the app has no per-user quota yet.
 2. Add `ANTHROPIC_API_KEY` in Vercel and redeploy.
-3. Rough costs: about $0.30–0.80 per mock report on Opus, plus interviewer turns. Keep the invite code set so only club members can sign up.
-4. To measure the Claude grader once (about $2): locally, put the key in `.env.local` and run `npm run eval:feedback -- --record`. Commit the recordings under `evals/feedback/recordings/` and the new results, and update RESULTS.md.
+3. What a mock interview, its report or any other feature costs per use is not measured yet. Watch the console's usage page for the first week, and keep the invite code set so only club members can sign up.
+4. To measure the Claude grader once (its cost is not measured yet; the spend limit caps it): locally, put the key in `.env.local` and run `npm run eval:feedback -- --record`. Commit the recordings under `evals/feedback/recordings/` and the new results, and update RESULTS.md.
 
 ## 7. Day to day
 

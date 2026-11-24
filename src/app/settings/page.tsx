@@ -22,21 +22,22 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       )}
 
       <section className="card mt-8 p-5">
-        <h2 className="font-medium">Mock interview recording</h2>
+        <h2 className="font-medium">Interview recording</h2>
         <p className="mt-1 text-sm text-muted">
-          A mock saves a text transcript of both voices, your code as you type, and your test runs, to build the feedback report. Audio is never saved.
+          Mock interviews, system design and behavioral rounds save a text transcript of both voices and your work (code and test runs, the
+          whiteboard, or your story notes) to build the report. Audio is never saved.
         </p>
         <form action={setConsentAction} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2">
             <input type="checkbox" name="consent" defaultChecked={privacy.recordingConsent} />
-            I agree to my mock interviews being recorded
+            I agree to my interviews being recorded
           </label>
           <button className="btn-secondary">Save</button>
         </form>
         <p className="mt-2 text-xs text-muted">
           {privacy.recordingConsent && privacy.consentAt
             ? `You agreed on ${privacy.consentAt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}.`
-            : "Off: you'll be asked before your next mock. Practice problems and other rounds still work."}
+            : "Off: you'll be asked before your next mock, system design or behavioral round. Practice problems and AI-assisted and debugging rounds still work."}
         </p>
       </section>
 

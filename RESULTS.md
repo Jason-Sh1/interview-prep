@@ -38,4 +38,4 @@ What the misses show (from the per-session results):
 
 ## Tests
 
-`npm test` has 18 test files; see the PR's CI checks for the latest run. On a heavily loaded Windows machine, a few database-backed tests can exceed the 60-second timeout when files run in parallel; each passes when run on its own.
+`npm test` has 23 test files and 369 tests (counted on 2026-11-24); see the PR's CI checks for the latest run, which is the source of truth. On the Windows laptop used for development, one test, "starter code compiles in both languages" in `tests/runner.test.ts` (it starts a Python or Node process for every problem in both languages), took 91 to 108 seconds and so exceeded the 60-second timeout, even when run on its own; the other 368 passed.

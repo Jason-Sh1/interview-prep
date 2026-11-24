@@ -31,6 +31,7 @@ export default function PrivacyPage() {
           typed it, test runs, and the feedback report built from them.
         </li>
         <li><strong>System design rounds</strong>, only after you agree: the transcript, your whiteboard and the report.</li>
+        <li><strong>Behavioral rounds</strong>, only after you agree: the transcript, your notes, a copy of your story titles and short summaries taken when the round starts, and the report.</li>
         <li><strong>AI-assisted and debugging rounds</strong>: your chat with the assistant, your files, answers and the report.</li>
         <li><strong>Behavioral prep</strong>, if you add them: your resume text and the stories in your story bank.</li>
       </ul>
