@@ -48,6 +48,18 @@ async function signUp(email: string, invite: string | null): Promise<string> {
   return setCookie.map((c) => c.split(";")[0]).join("; ");
 }
 
+/** Signs in with email and password and returns the cookie header. */
+async function signIn(email: string): Promise<string> {
+  const { auth } = await import("@/lib/auth/auth");
+  const res = await auth.api.signInEmail({
+    body: { email, password: "correct-horse-battery" },
+    headers: new Headers({ origin: "http://localhost:3000" }),
+    returnHeaders: true,
+  });
+  const setCookie = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie") ?? ""];
+  return setCookie.map((c) => c.split(";")[0]).join("; ");
+}
+
 describe("accounts mode", () => {
   it("refuses sign-up without the invite code", async () => {
     await expect(signUp("nocode@x.dev", null)).rejects.toThrow(/invite code/i);
@@ -120,6 +132,27 @@ describe("accounts mode", () => {
     expect(await verified("u-ghonly")).toBe(false);
     expect(await verified(other.id)).toBe(false);
     requestHeaders = new Headers();
+  });
+
+  it("hides the admin pages (/stats, /research) from everyone else", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { requireAdmin } = await import("@/lib/research/admin");
+    const { getCurrentUser } = await import("@/lib/auth/session");
+    process.env.ADMIN_EMAILS = "hopper@x.dev";
+    // hopper@x.dev was verified by linking GitHub in the test above.
+    requestHeaders = new Headers({ cookie: await signUp("visitor@x.dev", "club-2026") });
+    await expect(requireAdmin()).rejects.toThrow("not-found");
+    requestHeaders = new Headers();
+    await expect(requireAdmin()).rejects.toThrow("redirect:/signin");
+    requestHeaders = new Headers({ cookie: await signIn("hopper@x.dev") });
+    expect((await getCurrentUser())?.email).toBe("hopper@x.dev");
+    expect((await requireAdmin()).email).toBe("hopper@x.dev");
+    requestHeaders = new Headers();
+    // Both pages call it before reading anything: it's the first thing they await.
+    for (const page of ["src/app/stats/page.tsx", "src/app/research/page.tsx"]) {
+      const src = readFileSync(path.join(process.cwd(), page), "utf8");
+      expect(src.match(/await [^;]+;/)?.[0], page).toBe("await requireAdmin();");
+    }
   });
 
   it("only treats GitHub-verified ADMIN_EMAILS as research reviewers", async () => {

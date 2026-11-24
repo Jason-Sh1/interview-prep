@@ -160,6 +160,30 @@ describe("privacy against the database", () => {
     expect(again.mockSessions).toBe(0);
   });
 
+  it("deletes one user's recordings on request and leaves everyone else's", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const { purgeRecordings, setRecordingConsent } = await import("@/lib/privacy");
+    const mock = await import("@/lib/mock");
+    const me = await newUser("mine");
+    const other = await newUser("theirs");
+    for (const u of [me, other]) await setRecordingConsent(u.id, true);
+    const mine = [await recordedMock(me.id, 1), await recordedMock(me.id, 200)];
+    const theirs = await recordedMock(other.id, 1);
+
+    // No date limit: recent and old recordings both go.
+    expect((await purgeRecordings({ userId: me.id })).mockSessions).toBe(2);
+    for (const id of mine) {
+      expect((await mock.getMockSession(id))!.purgedAt).toBeInstanceOf(Date);
+      expect(await mock.getEvents(id)).toEqual([]);
+    }
+    expect((await mock.getMockSession(theirs))!.purgedAt).toBeNull();
+    expect(await mock.getEvents(theirs)).toHaveLength(1);
+    expect(await db.select().from(schema.feedbackReports).where(eq(schema.feedbackReports.sessionId, theirs))).toHaveLength(1);
+    // Already purged rows aren't counted again.
+    expect((await purgeRecordings({ userId: me.id })).mockSessions).toBe(0);
+  });
+
   it("refuses to rebuild the report of a purged round, for every round type", async () => {
     const { db, schema } = await import("@/lib/db");
     const { eq } = await import("drizzle-orm");
@@ -274,6 +298,40 @@ describe("privacy against the database", () => {
     resetRetentionPurgeClock();
   });
 
+  // Deleting the user row is all "Delete everything" does, so every table that
+  // holds a user's data has to cascade from it. Checked against the migrated
+  // database, so a new table that forgets the cascade (or the foreign key) fails here.
+  it("cascades every table that holds user data from user.id", async () => {
+    const { db } = await import("@/lib/db");
+    const { sql } = await import("drizzle-orm");
+    const rows = async <T,>(q: import("drizzle-orm").SQL) => {
+      const res = (await db.execute(q)) as unknown as T[] | { rows: T[] };
+      return Array.isArray(res) ? res : res.rows;
+    };
+    const withUserId = (
+      await rows<{ table_name: string }>(sql`select table_name from information_schema.columns where table_schema = 'public' and column_name = 'user_id'`)
+    ).map((r) => r.table_name);
+    const fks = await rows<{ tbl: string; col: string; target: string; action: string }>(sql`
+      select c.conrelid::regclass::text as tbl, a.attname as col, c.confrelid::regclass::text as target, c.confdeltype as action
+      from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)
+      where c.contype = 'f' and c.connamespace = 'public'::regnamespace`);
+    const unquote = (t: string) => t.replace(/^public\./, "").replace(/"/g, "");
+
+    // Every user_id column has a cascading foreign key to user.
+    expect(withUserId.length).toBeGreaterThanOrEqual(15);
+    for (const t of withUserId) {
+      const fk = fks.find((f) => unquote(f.tbl) === t && f.col === "user_id");
+      expect(fk, `${t}.user_id has no foreign key to user`).toBeDefined();
+      expect([unquote(fk!.target), fk!.action], `${t}.user_id`).toEqual(["user", "c"]);
+    }
+    // A table without user_id that hangs off a user's table (timeline events) cascades from it too.
+    const owned = new Set([...withUserId, "user"]);
+    for (const f of fks) {
+      if (!owned.has(unquote(f.target)) || withUserId.includes(unquote(f.tbl))) continue;
+      expect(f.action, `${unquote(f.tbl)}.${f.col} -> ${unquote(f.target)}`).toBe("c");
+    }
+  });
+
   it("deletes every row a user has, and only theirs", async () => {
     const { db, schema } = await import("@/lib/db");
     const { eq } = await import("drizzle-orm");
@@ -295,30 +353,18 @@ describe("privacy against the database", () => {
       reviewedBy: me.email,
     });
 
+    // Rows the test created in tables reached only through a session (timeline events, the report).
+    const [myMock] = await db.select().from(schema.mockSessions).where(eq(schema.mockSessions.userId, me.id));
+    expect(await db.select().from(schema.sessionEvents).where(eq(schema.sessionEvents.sessionId, myMock.id))).toHaveLength(1);
+
     await deleteAllUserData(me);
 
-    const userTables = [
-      schema.goals,
-      schema.privacySettings,
-      schema.patternSkill,
-      schema.attempts,
-      schema.reviewCards,
-      schema.mockSessions,
-      schema.feedbackReports,
-      schema.drills,
-      schema.assistedSessions,
-      schema.debugRounds,
-      schema.rounds,
-      schema.resumes,
-      schema.stories,
-      schema.diagnostics,
-      schema.session,
-      schema.account,
-    ] as const;
-    for (const t of userTables) {
-      expect(await db.select().from(t).where(eq(t.userId, me.id))).toEqual([]);
-    }
     expect(await db.select().from(schema.user).where(eq(schema.user.id, me.id))).toEqual([]);
+    expect(await db.select().from(schema.mockSessions).where(eq(schema.mockSessions.userId, me.id))).toEqual([]);
+    expect(await db.select().from(schema.sessionEvents).where(eq(schema.sessionEvents.sessionId, myMock.id))).toEqual([]);
+    expect(await db.select().from(schema.feedbackReports).where(eq(schema.feedbackReports.userId, me.id))).toEqual([]);
+    expect(await db.select().from(schema.goals).where(eq(schema.goals.userId, me.id))).toEqual([]);
+    expect(await db.select().from(schema.privacySettings).where(eq(schema.privacySettings.userId, me.id))).toEqual([]);
     expect(await db.select().from(schema.mockSessions).where(eq(schema.mockSessions.userId, other.id))).toHaveLength(1);
     expect(await db.select().from(schema.goals).where(eq(schema.goals.userId, other.id))).toHaveLength(1);
     const [p] = await db.select().from(schema.companyProfiles).where(eq(schema.companyProfiles.companyId, "acme"));

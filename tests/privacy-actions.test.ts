@@ -99,3 +99,35 @@ describe("start actions and recording consent", () => {
     expect(await startOrAskConsent(() => Promise.resolve(7), "/x")).toBe(7);
   });
 });
+
+describe("settings actions", () => {
+  it("turns recording consent on and off", async () => {
+    const { setConsentAction } = await import("@/app/settings/actions");
+    const { getPrivacy } = await import("@/lib/privacy");
+    const user = await me();
+    await setConsentAction(form({ consent: "on" }));
+    expect((await getPrivacy(user.id)).recordingConsent).toBe(true);
+    await setConsentAction(form({}));
+    expect((await getPrivacy(user.id)).recordingConsent).toBe(false);
+  });
+
+  // Last in the file: it deletes the single-user mode user.
+  it("deletes everything only when the word delete is typed", async () => {
+    const { deleteAllDataAction } = await import("@/app/settings/actions");
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const { saveGoals } = await import("@/lib/track");
+    const user = await me();
+    await saveGoals(user.id, { targetCompanies: ["google"], level: "mid", interviewDate: null, hoursPerWeek: 5, language: "python", timeZone: null });
+    const exists = async () => (await db.select().from(schema.user).where(eq(schema.user.id, user.id))).length === 1;
+
+    for (const typed of ["", "delet", "yes", "delete everything"]) {
+      expect(await redirectOf(deleteAllDataAction(form({ confirm: typed })))).toBe("/settings?confirm=1");
+      expect(await exists()).toBe(true);
+    }
+    // Case and surrounding spaces don't matter. Single-user mode starts over at onboarding.
+    expect(await redirectOf(deleteAllDataAction(form({ confirm: "  Delete " })))).toBe("/onboarding?deleted=1");
+    expect(await exists()).toBe(false);
+    expect(await db.select().from(schema.goals).where(eq(schema.goals.userId, user.id))).toEqual([]);
+  });
+});
