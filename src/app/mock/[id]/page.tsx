@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { RecordingDeleted } from "@/components/RecordingDeleted";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { isDiagnosticMock } from "@/lib/diagnostic";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
@@ -23,14 +24,12 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
   if (!problem) notFound();
   if (session.purgedAt) {
     return (
-      <main className="mx-auto w-full max-w-2xl px-4 py-10">
-        <h1 className="text-2xl font-semibold">{problem.title}</h1>
-        <div className="card mt-6 p-4 text-sm text-muted">
-          This interview&apos;s transcript, code timeline and report were deleted on{" "}
-          {session.purgedAt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}, under the retention limit or at your
-          request. What it changed in your plan stays.
-        </div>
-      </main>
+      <RecordingDeleted
+        title={problem.title}
+        what="interview's transcript, code timeline and report"
+        purgedAt={session.purgedAt}
+        note="What it changed in your plan stays."
+      />
     );
   }
   const events = await getEvents(id);

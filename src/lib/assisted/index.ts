@@ -25,6 +25,8 @@ export interface AssistedSession {
   finalFiles: Record<string, string> | null;
   explanation: string | null;
   report: AssistedReport | null;
+  /** Set when the recording was deleted (retention limit or Settings). */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.assistedSessions.$inferSelect;
@@ -43,6 +45,7 @@ function fromRow(r: Row): AssistedSession | null {
     finalFiles: r.finalFiles ?? null,
     explanation: r.explanation,
     report: (r.report as unknown as AssistedReport) ?? null,
+    purgedAt: r.purgedAt,
   };
 }
 
@@ -213,6 +216,8 @@ export function generateAssistedReport(session: AssistedSession): Promise<Assist
 async function buildReport(session: AssistedSession): Promise<AssistedReport> {
   const [row] = await db.select().from(schema.assistedSessions).where(eq(schema.assistedSessions.id, session.id));
   if (!row?.endedAt) throw new Error("The round hasn't ended yet");
+  // The recording was deleted: grading the starter files would be a made-up report.
+  if (row.purgedAt) throw new Error("This round's recording was deleted");
   if (row.report) return row.report as unknown as AssistedReport;
   const events = await getAssistedEvents(session.id);
   const input = {

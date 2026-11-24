@@ -154,6 +154,44 @@ describe("privacy against the database", () => {
     expect(again.mockSessions).toBe(0);
   });
 
+  it("refuses to rebuild the report of a purged round, for every round type", async () => {
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    const { purgeRecordings, setRecordingConsent } = await import("@/lib/privacy");
+    const assisted = await import("@/lib/assisted");
+    const debug = await import("@/lib/comprehension");
+    const rounds = await import("@/lib/rounds");
+    const u = await newUser("regen");
+    await setRecordingConsent(u.id, true);
+    const tests = { passed: 0, total: 0, failing: [] };
+
+    const aId = await assisted.createAssistedSession(u.id, "rate-limit", 45);
+    await assisted.finishAssisted((await assisted.getAssistedSession(aId, u.id))!, { files: { "a.js": "mine" }, explanation: "mine", tests });
+    const dId = await debug.createDebugRound(u.id, "checkout-bugs", 30, false);
+    await debug.finishDebugRound((await debug.getDebugRound(dId, u.id))!, { files: {}, answers: { q: "mine" }, notes: "mine", tests });
+    const roundIds: string[] = [];
+    for (const [kind, topic] of [["design", "url-shortener"], ["behavioral", "amazon-lp"]] as const) {
+      const id = await rounds.createRound(u.id, kind, topic, { minutes: 30, persona: "neutral", company: null, level: "mid" });
+      await rounds.finishRound((await rounds.getRound(id, u.id))!);
+      roundIds.push(id);
+    }
+
+    expect(await purgeRecordings({ userId: u.id })).toEqual({ mockSessions: 0, assistedSessions: 1, debugRounds: 1, rounds: 2 });
+
+    const a = (await assisted.getAssistedSession(aId, u.id))!;
+    expect(a.purgedAt).toBeInstanceOf(Date);
+    await expect(assisted.generateAssistedReport(a)).rejects.toThrow(/deleted/);
+    const d = (await debug.getDebugRound(dId, u.id))!;
+    expect(d.purgedAt).toBeInstanceOf(Date);
+    await expect(debug.generateDebugReport(d)).rejects.toThrow(/deleted/);
+    for (const id of roundIds) await expect(rounds.generateRoundReport((await rounds.getRound(id, u.id))!)).rejects.toThrow(/deleted/);
+
+    // Nothing was written back.
+    expect((await db.select().from(schema.assistedSessions).where(eq(schema.assistedSessions.id, aId)))[0].report).toBeNull();
+    expect((await db.select().from(schema.debugRounds).where(eq(schema.debugRounds.id, dId)))[0].report).toBeNull();
+    for (const id of roundIds) expect((await db.select().from(schema.rounds).where(eq(schema.rounds.id, id)))[0].report).toBeNull();
+  });
+
   it("deletes every row a user has, and only theirs", async () => {
     const { db, schema } = await import("@/lib/db");
     const { eq } = await import("drizzle-orm");
