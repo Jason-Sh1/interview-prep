@@ -20,13 +20,13 @@ import type { ClaudeGrade } from "@/lib/feedback/claude";
 import { eventSchema } from "@/lib/interview/types";
 
 describe("feedback eval set", () => {
-  it("has 20–30 scenarios with unique ids and draft labels awaiting review", () => {
+  it("has 20–30 scenarios with unique ids and labels", () => {
     expect(SCENARIOS.length).toBeGreaterThanOrEqual(20);
     expect(SCENARIOS.length).toBeLessThanOrEqual(30);
     expect(new Set(SCENARIOS.map((s) => s.id)).size).toBe(SCENARIOS.length);
-    expect(LABEL_STATUS).toMatch(/needs human review/);
+    // Reviewing a label (reviewed: true) is expected; these only check the shape.
     for (const s of SCENARIOS) {
-      expect(s.reviewed).toBe(false);
+      expect(typeof s.reviewed).toBe("boolean");
       expect(expectedPoints(s).length).toBeGreaterThan(0);
       expect(s.hire.length).toBeGreaterThan(0);
     }
@@ -126,8 +126,15 @@ describe("harness", () => {
 
   it("the stored heuristic results match the current labels and grader", async () => {
     const stored = JSON.parse(readFileSync(path.join(RESULTS_DIR, "heuristic.json"), "utf8")) as EvalResult;
+    // The hash covers the reviewed flags too: after reviewing labels, re-run npm run eval:feedback.
     expect(stored.labelsHash).toBe(labelsHash());
+    expect(stored.reviewedSessions).toBe(SCENARIOS.filter((s) => s.reviewed).length);
+    expect(stored.labelStatus).toBe(LABEL_STATUS);
     const fresh = await runEval("heuristic", heuristicGrader);
     expect(stored.summary).toEqual(fresh.summary);
+    // RESULTS.md quotes the review count; keep it in step with the stored run.
+    const results = readFileSync(path.join(process.cwd(), "RESULTS.md"), "utf8");
+    expect(results).toContain(`(${stored.reviewedSessions} of ${SCENARIOS.length} reviewed)`);
+    expect(results).toContain(`labels version \`${stored.labelsHash}\``);
   });
 });
