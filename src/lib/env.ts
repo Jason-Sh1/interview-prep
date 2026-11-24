@@ -14,7 +14,7 @@ export function checkEnv(env: Record<string, string | undefined> = process.env):
   const warnings: string[] = [];
   const production = env.NODE_ENV === "production";
   const onVercel = !!env.VERCEL;
-  const accounts = authMode() === "accounts";
+  const accounts = authMode(env) === "accounts";
 
   if (onVercel && !env.DATABASE_URL) {
     errors.push("DATABASE_URL is required on Vercel: the embedded database can't persist there. Set it to your Neon connection string.");

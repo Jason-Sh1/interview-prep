@@ -3,15 +3,17 @@ import "server-only";
 // recordings, and deleting everything a user has stored.
 //
 // What counts as a recording: a mock interview's timeline (transcript of both
-// voices, code edits, test runs) and its feedback report, which quotes the
-// transcript; an AI-assisted round's chat, files and explanation; a debugging
+// voices, code edits, test runs), its feedback report, which quotes the
+// transcript, and the wording of the drills that report wrote; an AI-assisted round's chat, files and explanation; a debugging
 // round's chat, files and answers; a conversation round's (system design)
 // transcript, whiteboard and report. Audio itself is never stored by the app:
 // speech is turned into text by the browser or by LiveKit, and only the text
 // is kept.
 
-import { and, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
+import { isSingleUser, LOCAL_USER } from "./auth/mode";
 import { db, ensureMigrated, schema } from "./db";
+import { RUBRIC, RUBRIC_INFO } from "./feedback/analyze";
 
 /** Bump when the consent text changes materially, so everyone is asked again. */
 export const CONSENT_VERSION = 1;
@@ -88,6 +90,18 @@ export async function purgeRecordings(opts: { before?: Date; userId?: string }, 
   if (mockIds.length) {
     await db.delete(schema.sessionEvents).where(inArray(schema.sessionEvents.sessionId, mockIds));
     await db.delete(schema.feedbackReports).where(inArray(schema.feedbackReports.sessionId, mockIds));
+    // A mock's drills stay in the plan (the area and the problem to practice it on), but their
+    // title and advice were written from the transcript, so they become the rubric's generic text.
+    for (const area of RUBRIC) {
+      await db
+        .update(schema.drills)
+        .set({ title: RUBRIC_INFO[area].label, drill: RUBRIC_INFO[area].help })
+        .where(and(inArray(schema.drills.sessionId, mockIds), eq(schema.drills.area, area)));
+    }
+    await db
+      .update(schema.drills)
+      .set({ title: "Practice", drill: "Work on this problem." })
+      .where(and(inArray(schema.drills.sessionId, mockIds), notInArray(schema.drills.area, [...RUBRIC])));
     await db
       .update(m)
       .set({ finalCode: null, interviewerState: {}, endedAt: sql`coalesce(${m.endedAt}, ${now.toISOString()}::timestamp)`, purgedAt: now })
@@ -186,6 +200,11 @@ export async function deleteAllUserData(user: { id: string; email: string }): Pr
   await ensureMigrated();
   await db.update(schema.companyProfiles).set({ reviewedBy: "deleted user" }).where(eq(schema.companyProfiles.reviewedBy, user.email));
   await db.delete(schema.user).where(eq(schema.user.id, user.id));
-  // Single-user mode caches the built-in user; make the next request start fresh.
+  if (isSingleUser()) {
+    // Start over as a fresh built-in user, which single-user mode prefers, rather
+    // than becoming whichever other account in the database is oldest.
+    await db.insert(schema.user).values(LOCAL_USER).onConflictDoNothing();
+  }
+  // Single-user mode caches its user; make the next request look it up again.
   (globalThis as { __ipLocalUser?: unknown }).__ipLocalUser = undefined;
 }

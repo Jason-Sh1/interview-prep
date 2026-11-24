@@ -41,11 +41,18 @@ describe("production settings check", () => {
   });
 
   it("warns about open sign-up, single-user mode and a missing cron secret", () => {
-    process.env.VERCEL = "1";
-    delete process.env.AUTH_MODE;
     expect(checkEnv({ ...vercel, SIGNUP_INVITE_CODE: "", CRON_SECRET: "" }).warnings.join(" ")).toMatch(/SIGNUP_INVITE_CODE[\s\S]*CRON_SECRET/);
+    expect(checkEnv({ ...vercel, AUTH_MODE: "single" }).warnings.join(" ")).toMatch(/AUTH_MODE=single/);
+  });
+
+  it("judges only the environment it's given, not the process's", () => {
+    // The process says single-user and not on Vercel; the checked environment says otherwise.
     process.env.AUTH_MODE = "single";
-    expect(checkEnv(vercel).warnings.join(" ")).toMatch(/AUTH_MODE=single/);
+    delete process.env.VERCEL;
+    expect(checkEnv(vercel)).toEqual({ errors: [], warnings: [] });
+    expect(checkEnv({ ...vercel, BETTER_AUTH_SECRET: "short" }).errors.join(" ")).toMatch(/BETTER_AUTH_SECRET/);
+    process.env.AUTH_MODE = "accounts";
+    expect(checkEnv({ NODE_ENV: "production" })).toEqual({ errors: [], warnings: [] });
   });
 
   it("asks nothing of a local single-user setup", () => {

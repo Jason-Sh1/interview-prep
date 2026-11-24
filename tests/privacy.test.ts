@@ -170,6 +170,11 @@ describe("privacy against the database", () => {
     for (const u of [me, other]) await setRecordingConsent(u.id, true);
     const mine = [await recordedMock(me.id, 1), await recordedMock(me.id, 200)];
     const theirs = await recordedMock(other.id, 1);
+    const drill = { area: "testing", title: "You said 'my secret plan' and never tested", drill: "Next time trace my secret plan by hand", problemSlug: "valid-anagram" };
+    await db.insert(schema.drills).values([
+      { ...drill, userId: me.id, sessionId: mine[0] },
+      { ...drill, userId: other.id, sessionId: theirs },
+    ]);
 
     // No date limit: recent and old recordings both go.
     expect((await purgeRecordings({ userId: me.id })).mockSessions).toBe(2);
@@ -180,6 +185,12 @@ describe("privacy against the database", () => {
     expect((await mock.getMockSession(theirs))!.purgedAt).toBeNull();
     expect(await mock.getEvents(theirs)).toHaveLength(1);
     expect(await db.select().from(schema.feedbackReports).where(eq(schema.feedbackReports.sessionId, theirs))).toHaveLength(1);
+    // The drill stays in the plan but loses the wording taken from the interview; theirs is untouched.
+    const [myDrill] = await db.select().from(schema.drills).where(eq(schema.drills.sessionId, mine[0]));
+    expect(myDrill).toMatchObject({ area: "testing", problemSlug: "valid-anagram", title: "Testing and edge cases" });
+    expect(JSON.stringify(myDrill)).not.toContain("secret plan");
+    const [theirDrill] = await db.select().from(schema.drills).where(eq(schema.drills.sessionId, theirs));
+    expect(theirDrill.drill).toContain("secret plan");
     // Already purged rows aren't counted again.
     expect((await purgeRecordings({ userId: me.id })).mockSessions).toBe(0);
   });

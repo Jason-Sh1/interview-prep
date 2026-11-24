@@ -27,7 +27,7 @@ openssl rand -hex 6       # SIGNUP_INVITE_CODE (or pick a phrase you'll share wi
 
 1. Sign up at [vercel.com](https://vercel.com) with GitHub (Hobby plan, free).
 2. **Add New… → Project** → import `Jason-Sh1/interview-prep`. Framework preset: Next.js (detected). Leave the build settings as they are.
-3. Before clicking Deploy, open **Environment Variables** and add these for **Production** (and Preview, if you want preview deploys to work):
+3. Before clicking Deploy, open **Environment Variables** and add these for **Production** only. Don't give Preview the production `DATABASE_URL`: see "Preview deploys" in step 7.
 
    | Name | Value |
    |---|---|
@@ -81,7 +81,9 @@ Without a key, every feature works with its scripted or rule-based fallback. Wit
 
 ## 7. Day to day
 
-- Every push to `main` redeploys. Pull requests get preview deploys (they share the production database unless you give Preview its own `DATABASE_URL`, for example a Neon branch).
+- Every push to `main` redeploys.
+- **Preview deploys:** every pull request gets one, and the app applies pending migrations when a server starts (`src/instrumentation.ts`). So a preview that shares the production `DATABASE_URL` would migrate the production database as soon as it starts, before the pull request is merged. Either leave `DATABASE_URL` unset for Preview (previews then refuse to start with a "Missing production settings" message, which is safe), or give Preview its own database: in Neon, **Branches → New branch** (for example `preview`), copy that branch's pooled connection string, and set it as Preview's `DATABASE_URL` in Vercel. A working preview also needs its own `BETTER_AUTH_SECRET` and a `BETTER_AUTH_URL` set to the preview's address; without one, Better Auth uses the production domain, so sign-in on the preview will probably be refused (not tried yet).
+- **Forgotten passwords:** there's no password reset yet, because it needs an email-sending service (another account and secret). A member who linked GitHub can use **Continue with GitHub**. Otherwise the only fix today is for you to delete their row in Neon's SQL editor (`delete from "user" where email = '…';`, which deletes all their data through the cascades), so they can sign up again.
 - To invite people, share the site URL and the invite code. To stop new sign-ups, change `SIGNUP_INVITE_CODE` and redeploy.
 - Usage: `/stats` (admins) shows weekly active users and completed sessions.
 - The LiveKit voice agent (`agent/`) can't run on Vercel. Without it, mocks use the browser's voice, which is fine for most users.

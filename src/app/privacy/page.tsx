@@ -16,6 +16,14 @@ export default function PrivacyPage() {
       <h2 className="mt-8 text-lg font-semibold">What we store</h2>
       <ul className="mt-2 list-disc space-y-1.5 pl-5">
         <li><strong>Your account</strong>: name, email and a hashed password (or your GitHub identity if you sign in with GitHub).</li>
+        <li>
+          <strong>Sign-in sessions</strong>: for each device you&apos;re signed in on, its IP address and browser (user agent), kept with the session
+          until you sign out or it expires.
+        </li>
+        <li>
+          <strong>Abuse limits</strong>: to slow down password guessing, sign-in and sign-up attempts are counted per IP address. The counter holds
+          the IP address and a count, not who you are.
+        </li>
         <li><strong>Your goals</strong>: target companies, interview date, level, hours per week, language and time zone.</li>
         <li><strong>Practice history</strong>: each attempt (timings, test results, hints, confidence, your code), your skill ratings and review schedule.</li>
         <li>
@@ -42,14 +50,16 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Anthropic (Claude)</strong>, when the site has an API key configured: interview transcripts, code and test results are sent to
-          Claude to run the interviewer, the assistants and the feedback report. Anthropic doesn&apos;t train its models on API data by default.
+          Claude to run the interviewer, the assistants and the feedback report, and your resume text is sent when you press &quot;Draft
+          stories&quot; in the story bank. Anthropic doesn&apos;t train its models on API data by default.
         </li>
         <li><strong>Hosting</strong>: the app and its database run on the site operator&apos;s hosting providers (for example Vercel and Neon).</li>
       </ul>
 
       <h2 className="mt-8 text-lg font-semibold">How long we keep it</h2>
       <p className="mt-2">
-        Recordings (mock and design-round transcripts, code timelines, whiteboards, feedback reports, and AI round chats and files) are deleted automatically {days} days after the
+        Recordings (mock, system design and behavioral transcripts, code timelines, whiteboards and notes, feedback reports and the drill advice
+        written from them, and AI round chats and files) are deleted automatically {days} days after the
         session. {retentionSchedule()} We keep a content-free note that a session happened (problem, date, length) so your progress and usage counts add up. Your account,
         goals and practice history stay until you delete them.
       </p>
@@ -62,7 +72,7 @@ export default function PrivacyPage() {
 
       <h2 className="mt-8 text-lg font-semibold">Your controls</h2>
       <ul className="mt-2 list-disc space-y-1.5 pl-5">
-        <li>Turn mock recording consent on or off, delete all your recordings now, or delete your account and every row stored with it, in <Link href="/settings" className="text-accent hover:underline">Settings</Link>.</li>
+        <li>Turn recording consent on or off, delete all your recordings now, or delete your account and every row stored with it, in <Link href="/settings" className="text-accent hover:underline">Settings</Link>.</li>
         <li>Deleting is immediate and permanent; nothing is kept in a backup by the app (the hosting provider&apos;s own short-term backups expire on their schedule).</li>
       </ul>
 

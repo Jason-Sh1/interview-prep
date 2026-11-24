@@ -9,10 +9,10 @@
 
 export type AuthMode = "single" | "accounts";
 
-export function authMode(): AuthMode {
-  const v = process.env.AUTH_MODE?.trim().toLowerCase();
+export function authMode(env: Record<string, string | undefined> = process.env): AuthMode {
+  const v = env.AUTH_MODE?.trim().toLowerCase();
   if (v === "single" || v === "accounts") return v;
-  return process.env.VERCEL ? "accounts" : "single";
+  return env.VERCEL ? "accounts" : "single";
 }
 
 export const isSingleUser = () => authMode() === "single";

@@ -119,7 +119,9 @@ describe("settings actions", () => {
     const { saveGoals } = await import("@/lib/track");
     const user = await me();
     await saveGoals(user.id, { targetCompanies: ["google"], level: "mid", interviewDate: null, hoursPerWeek: 5, language: "python", timeZone: null });
-    const exists = async () => (await db.select().from(schema.user).where(eq(schema.user.id, user.id))).length === 1;
+    // An older account left over from accounts mode: deleting must not switch to it.
+    await db.insert(schema.user).values({ id: "u-older", name: "Older", email: "older@x.dev", createdAt: new Date("2020-01-01T00:00:00Z") });
+    const exists = async () => (await db.select().from(schema.goals).where(eq(schema.goals.userId, user.id))).length === 1;
 
     for (const typed of ["", "delet", "yes", "delete everything"]) {
       expect(await redirectOf(deleteAllDataAction(form({ confirm: typed })))).toBe("/settings?confirm=1");
@@ -128,6 +130,10 @@ describe("settings actions", () => {
     // Case and surrounding spaces don't matter. Single-user mode starts over at onboarding.
     expect(await redirectOf(deleteAllDataAction(form({ confirm: "  Delete " })))).toBe("/onboarding?deleted=1");
     expect(await exists()).toBe(false);
-    expect(await db.select().from(schema.goals).where(eq(schema.goals.userId, user.id))).toEqual([]);
+    // The next request is a fresh built-in user, not the older account.
+    const next = await me();
+    expect(next.id).toBe("local-user");
+    expect(await db.select().from(schema.goals).where(eq(schema.goals.userId, next.id))).toEqual([]);
+    expect(await db.select().from(schema.user).where(eq(schema.user.id, "u-older"))).toHaveLength(1);
   });
 });
