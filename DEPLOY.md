@@ -88,4 +88,4 @@ Without a key, every feature works with its scripted or rule-based fallback. Wit
 
 ## Settings reference
 
-Every setting, with what it does, is in [.env.example](.env.example). Required on Vercel: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (or the default Vercel domain). Strongly recommended: `SIGNUP_INVITE_CODE`, `CRON_SECRET`.
+Every setting, with what it does, is in [.env.example](.env.example). Required on Vercel: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (or the default Vercel domain). Strongly recommended: `SIGNUP_INVITE_CODE`, `CRON_SECRET` (without it the research job never runs; expired recordings are still deleted, by a once-a-day check when someone uses the site).

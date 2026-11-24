@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { retentionDays } from "@/lib/privacy";
+import { retentionDays, retentionSchedule } from "@/lib/privacy";
 
 export const metadata: Metadata = { title: "Privacy · Interview Prep" };
 
@@ -50,7 +50,7 @@ export default function PrivacyPage() {
       <h2 className="mt-8 text-lg font-semibold">How long we keep it</h2>
       <p className="mt-2">
         Recordings (mock and design-round transcripts, code timelines, whiteboards, feedback reports, and AI round chats and files) are deleted automatically {days} days after the
-        session. We keep a content-free note that a session happened (problem, date, length) so your progress and usage counts add up. Your account,
+        session. {retentionSchedule()} We keep a content-free note that a session happened (problem, date, length) so your progress and usage counts add up. Your account,
         goals and practice history stay until you delete them.
       </p>
 

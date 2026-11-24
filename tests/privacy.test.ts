@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { DEFAULT_RETENTION_DAYS, retentionDays } from "@/lib/privacy";
+import { DEFAULT_RETENTION_DAYS, retentionDays, retentionSchedule } from "@/lib/privacy";
 
 describe("retention setting", () => {
   it("defaults to 90 days and accepts 1 to 3650", () => {
@@ -11,6 +11,12 @@ describe("retention setting", () => {
     expect(retentionDays({ RETENTION_DAYS: "0" })).toBe(DEFAULT_RETENTION_DAYS);
     expect(retentionDays({ RETENTION_DAYS: "abc" })).toBe(DEFAULT_RETENTION_DAYS);
     expect(retentionDays({ RETENTION_DAYS: "99999" })).toBe(3650);
+  });
+
+  it("describes the schedule that is actually configured", () => {
+    expect(retentionSchedule({ VERCEL: "1", CRON_SECRET: "s" })).toMatch(/scheduled job/);
+    expect(retentionSchedule({ VERCEL: "1" })).toMatch(/when someone uses the site/);
+    expect(retentionSchedule({ CRON_SECRET: "s" })).toMatch(/when someone uses the site/);
   });
 });
 
@@ -233,6 +239,39 @@ describe("privacy against the database", () => {
     expect((await db.select().from(schema.debugRounds).where(eq(schema.debugRounds.id, dId)))[0].files).toBeNull();
     for await (const _ of rounds.runRoundTurn(staleRound, { kind: "say", text: "my design", source: "typed" })) void _;
     expect((await db.select().from(schema.rounds).where(eq(schema.rounds.id, rId)))[0]).toMatchObject({ transcript: [], stage: {} });
+  });
+
+  it("runs the retention purge at most once a day from page loads", async () => {
+    const { purgeExpiredIfDue, resetRetentionPurgeClock, setRecordingConsent } = await import("@/lib/privacy");
+    const { scheduleRetentionPurge } = await import("@/lib/retention-schedule");
+    const mock = await import("@/lib/mock");
+    const u = await newUser("daily");
+    await setRecordingConsent(u.id, true);
+    const old = await recordedMock(u.id, 120);
+    resetRetentionPurgeClock();
+
+    // A page load schedules the purge to run after the response.
+    const tasks: (() => Promise<void>)[] = [];
+    scheduleRetentionPurge((t) => void tasks.push(t));
+    expect(tasks).toHaveLength(1);
+    await tasks[0]();
+    expect((await mock.getMockSession(old))!.purgedAt).toBeInstanceOf(Date);
+
+    // Within the day it doesn't run again; a day later it does.
+    const now = Date.now();
+    const again = await recordedMock(u.id, 120);
+    expect(await purgeExpiredIfDue(new Date(now + 3_600_000), 90)).toBeNull();
+    expect((await mock.getMockSession(again))!.purgedAt).toBeNull();
+    expect((await purgeExpiredIfDue(new Date(now + 86_400_000 + 60_000), 90))?.mockSessions).toBeGreaterThanOrEqual(1);
+    expect((await mock.getMockSession(again))!.purgedAt).toBeInstanceOf(Date);
+
+    // Outside a request, `after` throws and nothing is scheduled (or thrown).
+    expect(() =>
+      scheduleRetentionPurge(() => {
+        throw new Error("after() outside a request");
+      }),
+    ).not.toThrow();
+    resetRetentionPurgeClock();
   });
 
   it("deletes every row a user has, and only theirs", async () => {

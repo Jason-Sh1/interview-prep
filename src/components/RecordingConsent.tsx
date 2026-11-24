@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { retentionDays } from "@/lib/privacy";
+import { retentionDays, retentionSchedule } from "@/lib/privacy";
 
 // The consent checkbox shown inside a form that starts a mock interview, until
 // the user has agreed once. The server refuses to create a mock without consent
@@ -39,7 +39,8 @@ export function RecordingConsent({
         </li>
         {claude && <li>The transcript and code are sent to Anthropic&apos;s Claude API to run the interviewer and write your report.</li>}
         <li>
-          Recordings are deleted automatically after {retentionDays()} days, and you can delete them, or everything, any time in{" "}
+          Recordings are deleted automatically after {retentionDays()} days. {retentionSchedule()} You can delete them, or everything, any
+          time in{" "}
           <Link href="/settings" className="text-accent hover:underline">Settings</Link>. Details on the{" "}
           <Link href="/privacy" className="text-accent hover:underline">privacy page</Link>.
         </li>

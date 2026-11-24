@@ -2,7 +2,7 @@ import Link from "next/link";
 import { githubEnabled } from "@/lib/auth/auth";
 import { isSingleUser } from "@/lib/auth/mode";
 import { requireUser } from "@/lib/auth/session";
-import { getPrivacy, retentionDays } from "@/lib/privacy";
+import { getPrivacy, retentionDays, retentionSchedule } from "@/lib/privacy";
 import { deleteAllDataAction, deleteRecordingsAction, setConsentAction } from "./actions";
 import { LinkGitHub } from "./LinkGitHub";
 
@@ -45,7 +45,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         <p className="mt-1 text-sm text-muted">
           Interview recordings (mock and system design transcripts, code timelines, whiteboards and reports, and the chats and files from AI-assisted and
           debugging rounds) are deleted
-          automatically {days} days after the session. Your plan, ratings and solved problems stay until you delete your account.
+          automatically {days} days after the session. {retentionSchedule()} Your plan, ratings and solved problems stay until you delete your account.
         </p>
         <form action={deleteRecordingsAction} className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <label className="flex items-center gap-2">

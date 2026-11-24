@@ -3,7 +3,8 @@ import { purgeExpired, retentionDays } from "@/lib/privacy";
 
 // The daily retention job, scheduled in vercel.json: deletes interview
 // recordings older than RETENTION_DAYS (default 90). Off unless CRON_SECRET is
-// set (see lib/cron.ts).
+// set (see lib/cron.ts). Signed-in page loads also run the purge at most once
+// a day (lib/retention-schedule.ts), so deletion doesn't depend on this job.
 
 export const maxDuration = 300;
 

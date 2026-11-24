@@ -33,7 +33,9 @@ export function checkEnv(env: Record<string, string | undefined> = process.env):
     warnings.push("AUTH_MODE=single on Vercel: anyone with the address can use the app as you. Remove AUTH_MODE to require accounts.");
   }
   if (onVercel && !env.CRON_SECRET) {
-    warnings.push("CRON_SECRET is not set, so the research and retention jobs won't run.");
+    warnings.push(
+      "CRON_SECRET is not set, so the scheduled research and retention jobs won't run. Expired recordings are still deleted by a once-a-day check on page loads.",
+    );
   }
   return { errors, warnings };
 }

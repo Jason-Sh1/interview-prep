@@ -143,6 +143,40 @@ export function purgeExpired(now = new Date(), days = retentionDays()): Promise<
   return purgeRecordings({ before: new Date(now.getTime() - days * 86_400_000) }, now);
 }
 
+const DAY_MS = 86_400_000;
+const purgeState = globalThis as { __ipLastRetentionPurge?: number };
+
+/**
+ * The retention purge, at most once a day per server instance. Signed-in page
+ * loads call it (lib/retention-schedule.ts), so recordings are deleted on time
+ * even when the cron job isn't configured. Returns null when it didn't run.
+ * After a failure it tries again an hour later rather than on every request.
+ */
+export async function purgeExpiredIfDue(now = new Date(), days = retentionDays()): Promise<PurgeCounts | null> {
+  if (now.getTime() - (purgeState.__ipLastRetentionPurge ?? 0) < DAY_MS) return null;
+  purgeState.__ipLastRetentionPurge = now.getTime();
+  try {
+    return await purgeExpired(now, days);
+  } catch (e) {
+    purgeState.__ipLastRetentionPurge = now.getTime() - DAY_MS + 3_600_000;
+    throw e;
+  }
+}
+
+/** Forget the last run, for tests. */
+export const resetRetentionPurgeClock = () => void (purgeState.__ipLastRetentionPurge = undefined);
+
+/**
+ * When the retention purge actually runs, in words for the privacy page,
+ * Settings and the consent notice. A Vercel cron job runs only on Vercel with
+ * CRON_SECRET set; otherwise it's the once-a-day check on page loads.
+ */
+export function retentionSchedule(env: Record<string, string | undefined> = process.env): string {
+  return env.VERCEL && env.CRON_SECRET
+    ? "A scheduled job deletes them every day, so a recording can outlive the limit by up to a day."
+    : "The app checks for them at most once a day, when someone uses the site, so a recording can outlive the limit by a day or until the next visit.";
+}
+
 /**
  * Deletes the user and everything that references them (every progress,
  * recording and privacy table cascades from user.id), and removes their email
