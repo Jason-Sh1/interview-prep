@@ -4,6 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { db, schema } from "../db";
+import { verifyEmailOnGitHubLink } from "./github-link";
 import { INVITE_HEADER, inviteCode, inviteOk } from "./invite";
 
 const invite = inviteCode();
@@ -54,6 +55,10 @@ export const auth = betterAuth({
         throw new APIError("FORBIDDEN", { message: "That invite code isn't right. Ask whoever runs this site for one." });
       }
     }),
+  },
+  databaseHooks: {
+    // Settings → Link GitHub verifies the account's email (see github-link.ts).
+    account: { create: { after: async (account) => void (await verifyEmailOnGitHubLink(account)) } },
   },
   plugins: [nextCookies()],
 });

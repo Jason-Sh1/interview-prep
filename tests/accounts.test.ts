@@ -89,6 +89,39 @@ describe("accounts mode", () => {
     expect(await mock.getMockSession(id, b.id)).toBeNull();
   });
 
+  it("verifies the email when GitHub is linked to a password account (Settings → Link GitHub)", async () => {
+    const { auth } = await import("@/lib/auth/auth");
+    const { getCurrentUser } = await import("@/lib/auth/session");
+    const { isAdmin } = await import("@/lib/research/admin");
+    const { db, schema } = await import("@/lib/db");
+    process.env.ADMIN_EMAILS = "hopper@x.dev,ghonly@x.dev";
+    const cookie = await signUp("hopper@x.dev", "club-2026");
+    requestHeaders = new Headers({ cookie });
+    const before = (await getCurrentUser())!;
+    expect(before.emailVerified).toBe(false);
+    expect(isAdmin(before)).toBe(false);
+
+    // The same adapter call Better Auth's link callback makes once GitHub confirmed the matching, verified email.
+    const ctx = await auth.$context;
+    await ctx.internalAdapter.linkAccount({ userId: before.id, providerId: "github", accountId: "gh-hopper" });
+    const after = (await getCurrentUser())!;
+    expect(after.emailVerified).toBe(true);
+    expect(isAdmin(after)).toBe(true);
+
+    // Other providers, and a GitHub login with no password account behind it, change nothing.
+    await db.insert(schema.user).values({ id: "u-ghonly", name: "G", email: "ghonly@x.dev" });
+    await ctx.internalAdapter.linkAccount({ userId: "u-ghonly", providerId: "github", accountId: "gh-only" });
+    const cookie2 = await signUp("gitlab@x.dev", "club-2026");
+    requestHeaders = new Headers({ cookie: cookie2 });
+    const other = (await getCurrentUser())!;
+    await ctx.internalAdapter.linkAccount({ userId: other.id, providerId: "gitlab", accountId: "gl-1" });
+    const { eq } = await import("drizzle-orm");
+    const verified = async (id: string) => (await db.select().from(schema.user).where(eq(schema.user.id, id)))[0].emailVerified;
+    expect(await verified("u-ghonly")).toBe(false);
+    expect(await verified(other.id)).toBe(false);
+    requestHeaders = new Headers();
+  });
+
   it("only treats GitHub-verified ADMIN_EMAILS as research reviewers", async () => {
     process.env.ADMIN_EMAILS = "ada@x.dev";
     const { isAdmin } = await import("@/lib/research/admin");

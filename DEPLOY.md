@@ -68,7 +68,7 @@ Admin pages (`/research`, `/stats`) need an email verified by GitHub, so passwor
    - Homepage URL: `https://<your-app>.vercel.app`
    - Authorization callback URL: `https://<your-app>.vercel.app/api/auth/callback/github`
 2. Copy the Client ID, generate a client secret, and add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in Vercel, then redeploy.
-3. With an invite code set, GitHub only signs in **existing** accounts. So sign up with email and password first, using the same email as your GitHub account's primary email, then go to **Settings → Link GitHub**. Once linked, your email counts as verified, `/research` and **Usage** appear in the menu, and **Continue with GitHub** signs you in.
+3. With an invite code set, GitHub only signs in **existing** accounts. So sign up with email and password first, using the same email as your GitHub account's primary email, then go to **Settings → Link GitHub**. Linking only works when your GitHub primary email is the same address and verified on GitHub. Once linked, your email counts as verified, `/research` and **Usage** appear in the menu, and **Continue with GitHub** signs you in.
 
 ## 6. Optional: turn on Claude (when you have an API key)
 
