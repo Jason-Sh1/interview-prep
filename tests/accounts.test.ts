@@ -113,7 +113,9 @@ describe("accounts mode", () => {
     expect(before.emailVerified).toBe(false);
     expect(isAdmin(before)).toBe(false);
 
-    // The same adapter call Better Auth's link callback makes once GitHub confirmed the matching, verified email.
+    // Better Auth's link callback (Settings → Link GitHub) stores the account with internalAdapter.createAccount
+    // once GitHub confirmed the matching, verified email; linkAccount here goes through the same
+    // `account.create.after` hook, so it stands in for that callback.
     const ctx = await auth.$context;
     await ctx.internalAdapter.linkAccount({ userId: before.id, providerId: "github", accountId: "gh-hopper" });
     const after = (await getCurrentUser())!;
@@ -132,6 +134,15 @@ describe("accounts mode", () => {
     expect(await verified("u-ghonly")).toBe(false);
     expect(await verified(other.id)).toBe(false);
     requestHeaders = new Headers();
+  });
+
+  it("keeps Better Auth's account-linking checks that the GitHub verify hook relies on", async () => {
+    // verifyEmailOnGitHubLink is safe only because Better Auth refuses a link unless GitHub reports
+    // the same, verified email, and won't link implicitly to an unverified local account. Turning on
+    // `allowDifferentEmails`, trusted providers or other accountLinking options would break that.
+    const { auth } = await import("@/lib/auth/auth");
+    expect((auth.options as { account?: { accountLinking?: unknown } }).account?.accountLinking).toBeUndefined();
+    expect((await auth.$context).trustedProviders).not.toContain("github");
   });
 
   it("hides the admin pages (/stats, /research) from everyone else", async () => {

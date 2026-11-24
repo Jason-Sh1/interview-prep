@@ -55,7 +55,9 @@ export const auth = betterAuth({
     }),
   },
   databaseHooks: {
-    // Settings → Link GitHub verifies the account's email (see github-link.ts).
+    // Settings → Link GitHub verifies the account's email (see github-link.ts). That's only safe
+    // while account.accountLinking stays unset: Better Auth then refuses a link unless GitHub
+    // reports the same, verified email (tests/accounts.test.ts pins this).
     account: { create: { after: async (account) => void (await verifyEmailOnGitHubLink(account)) } },
   },
   plugins: [nextCookies()],
