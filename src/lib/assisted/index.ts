@@ -25,6 +25,8 @@ export interface AssistedSession {
   finalFiles: Record<string, string> | null;
   explanation: string | null;
   report: AssistedReport | null;
+  /** Set when the recording was deleted (retention limit or Settings). */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.assistedSessions.$inferSelect;
@@ -43,6 +45,7 @@ function fromRow(r: Row): AssistedSession | null {
     finalFiles: r.finalFiles ?? null,
     explanation: r.explanation,
     report: (r.report as unknown as AssistedReport) ?? null,
+    purgedAt: r.purgedAt,
   };
 }
 
@@ -101,8 +104,14 @@ export async function getAssistedEvents(sessionId: string): Promise<AssistedEven
   });
 }
 
+/** Appends events, unless the round's recording was deleted (then they're dropped). */
 export async function appendAssistedEvents(sessionId: string, events: AssistedEvent[]): Promise<void> {
   if (!events.length) return;
+  const [s] = await db
+    .select({ purgedAt: schema.assistedSessions.purgedAt })
+    .from(schema.assistedSessions)
+    .where(eq(schema.assistedSessions.id, sessionId));
+  if (s?.purgedAt) return;
   await db
     .insert(schema.assistedEvents)
     .values(events.map((e) => ({ sessionId, t: e.t, type: e.type, payload: e.payload as Record<string, unknown> })));
@@ -167,7 +176,7 @@ export async function chat(session: AssistedSession, input: { text: string; mode
     await db
       .update(schema.assistedSessions)
       .set({ assistantState: res.state as unknown as Record<string, unknown> })
-      .where(eq(schema.assistedSessions.id, session.id));
+      .where(and(eq(schema.assistedSessions.id, session.id), isNull(schema.assistedSessions.purgedAt)));
   }
   await appendAssistedEvents(session.id, [
     { type: "prompt", t: promptT, payload: { text: input.text, model } },
@@ -213,6 +222,8 @@ export function generateAssistedReport(session: AssistedSession): Promise<Assist
 async function buildReport(session: AssistedSession): Promise<AssistedReport> {
   const [row] = await db.select().from(schema.assistedSessions).where(eq(schema.assistedSessions.id, session.id));
   if (!row?.endedAt) throw new Error("The round hasn't ended yet");
+  // The recording was deleted: grading the starter files would be a made-up report.
+  if (row.purgedAt) throw new Error("This round's recording was deleted");
   if (row.report) return row.report as unknown as AssistedReport;
   const events = await getAssistedEvents(session.id);
   const input = {
@@ -231,9 +242,12 @@ async function buildReport(session: AssistedSession): Promise<AssistedReport> {
       console.error("Claude grading failed; using the rule-based report", e);
     }
   }
-  await db
+  // Not into a round whose recording was deleted while it was being graded.
+  const [saved] = await db
     .update(schema.assistedSessions)
     .set({ report: report as unknown as Record<string, unknown> })
-    .where(eq(schema.assistedSessions.id, session.id));
+    .where(and(eq(schema.assistedSessions.id, session.id), isNull(schema.assistedSessions.purgedAt)))
+    .returning({ id: schema.assistedSessions.id });
+  if (!saved) throw new Error("This round's recording was deleted");
   return report;
 }

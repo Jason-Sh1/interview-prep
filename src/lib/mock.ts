@@ -22,6 +22,7 @@ import {
   type TurnKind,
   type VoiceMode,
 } from "./interview/types";
+import { ConsentRequiredError, hasRecordingConsent } from "./privacy";
 import { PROBLEM_BY_SLUG } from "./problems";
 import type { Problem } from "./problems/types";
 import { starterCode, type Language } from "./runner/drivers";
@@ -37,6 +38,8 @@ export interface MockSession {
   startedAt: Date;
   endedAt: Date | null;
   finalCode: string | null;
+  /** Set when the retention limit deleted the recording. */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.mockSessions.$inferSelect;
@@ -53,6 +56,7 @@ function fromRow(r: Row): MockSession {
     startedAt: r.startedAt,
     endedAt: r.endedAt,
     finalCode: r.finalCode,
+    purgedAt: r.purgedAt,
   };
 }
 
@@ -63,6 +67,8 @@ export function mockCapabilities(): { voice: VoiceMode; interviewer: Interviewer
 
 export async function createMockSession(userId: string, input: { slug: string; config: MockConfig; language: Language }): Promise<string> {
   await ensureMigrated();
+  // A mock records a transcript of the candidate's voice, so it needs consent first.
+  if (!(await hasRecordingConsent(userId))) throw new ConsentRequiredError();
   const id = randomUUID();
   const caps = mockCapabilities();
   await db.insert(schema.mockSessions).values({
@@ -130,8 +136,11 @@ export async function getEvents(sessionId: string): Promise<SessionEvent[]> {
   });
 }
 
+/** Appends timeline events, unless the session's recording was deleted (then they're dropped). */
 export async function appendEvents(sessionId: string, events: SessionEvent[]): Promise<void> {
   if (!events.length) return;
+  const [s] = await db.select({ purgedAt: schema.mockSessions.purgedAt }).from(schema.mockSessions).where(eq(schema.mockSessions.id, sessionId));
+  if (s?.purgedAt) return;
   await db.insert(schema.sessionEvents).values(
     events.map((e) => ({ sessionId, t: e.t, type: e.type, payload: e.payload as Record<string, unknown> })),
   );
@@ -189,7 +198,10 @@ export async function* runTurn(session: MockSession, input: TurnInput, signal?: 
   const [row] = await db.select({ s: schema.mockSessions.interviewerState }).from(schema.mockSessions).where(eq(schema.mockSessions.id, session.id));
   const state = { ...INITIAL_SCRIPT_STATE, ...(row?.s as Partial<ScriptState>) };
   const scripted = scriptedTurn(state, { kind: input.kind, text: input.text, ctx, problem, config: session.config, companyName: companyName(session.config) });
-  await db.update(schema.mockSessions).set({ interviewerState: scripted.state as unknown as Record<string, unknown> }).where(eq(schema.mockSessions.id, session.id));
+  await db
+    .update(schema.mockSessions)
+    .set({ interviewerState: scripted.state as unknown as Record<string, unknown> })
+    .where(and(eq(schema.mockSessions.id, session.id), isNull(schema.mockSessions.purgedAt)));
 
   // Everything sent to the client is recorded, even when the turn is cut off
   // (a new turn aborts this one), so the transcript matches what was said.

@@ -34,6 +34,7 @@ describe("mock sessions", () => {
     await ensureMigrated();
     const userId = `u-${Math.random().toString(36).slice(2)}`;
     await db.insert(schema.user).values({ id: userId, name: "T", email: `${userId}@x.dev` });
+    await (await import("@/lib/privacy")).setRecordingConsent(userId, true);
     const id = await mock.createMockSession(userId, {
       slug: "pair-with-target-sum",
       config: { persona: "friendly", minutes: 30, hintsAllowed: true, company: null },

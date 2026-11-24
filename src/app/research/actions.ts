@@ -2,15 +2,15 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
-import { executeRun, reviewProfile, startRun } from "@/lib/research";
+import { executeRun, researchBudgetMs, reviewProfile, startRun } from "@/lib/research";
 import { requireAdmin } from "@/lib/research/admin";
 
 export async function startResearchAction(): Promise<{ error?: string }> {
   await requireAdmin();
   const run = await startRun("manual");
   if (!run) return { error: "A run is already going." };
-  // Research takes minutes, so it finishes after the response.
-  if (run.status === "running") after(() => executeRun(run.id));
+  // Research takes minutes, so it finishes after the response, within the page's time limit.
+  if (run.status === "running") after(() => executeRun(run.id, undefined, { budgetMs: researchBudgetMs() }));
   revalidatePath("/research");
   return {};
 }

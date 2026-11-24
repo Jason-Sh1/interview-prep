@@ -1,0 +1,176 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// The hosted path: AUTH_MODE=accounts with Better Auth, against an embedded
+// database. next/headers is stubbed so getCurrentUser sees the cookie a real
+// browser would send back.
+let requestHeaders = new Headers();
+vi.mock("next/headers", () => ({
+  headers: async () => requestHeaders,
+  cookies: async () => ({ get: () => undefined, getAll: () => [], set: () => {}, delete: () => {}, has: () => false }),
+}));
+vi.mock("next/navigation", () => ({
+  redirect: (to: string) => {
+    throw new Error(`redirect:${to}`);
+  },
+  notFound: () => {
+    throw new Error("not-found");
+  },
+}));
+
+const saved = { ...process.env };
+beforeAll(() => {
+  process.env.PGLITE_DIR = mkdtempSync(path.join(tmpdir(), "accounts-db-"));
+  process.env.AUTH_MODE = "accounts";
+  process.env.SIGNUP_INVITE_CODE = "club-2026";
+  process.env.BETTER_AUTH_SECRET = "test-secret-that-is-long-enough-1234567890";
+  process.env.BETTER_AUTH_URL = "http://localhost:3000";
+  delete process.env.ANTHROPIC_API_KEY;
+  vi.resetModules();
+});
+// The app applies migrations at startup (instrumentation.ts); do the same here.
+beforeAll(async () => {
+  await (await import("@/lib/db")).ensureMigrated();
+}, 120_000);
+afterAll(() => {
+  process.env = saved;
+});
+
+/** Signs up through Better Auth's API and returns the cookie header a browser would send. */
+async function signUp(email: string, invite: string | null): Promise<string> {
+  const { auth } = await import("@/lib/auth/auth");
+  const headers = new Headers({ origin: "http://localhost:3000" });
+  if (invite !== null) headers.set("x-invite-code", invite);
+  const res = await auth.api.signUpEmail({ body: { email, password: "correct-horse-battery", name: email.split("@")[0] }, headers, returnHeaders: true });
+  const setCookie = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie") ?? ""];
+  return setCookie.map((c) => c.split(";")[0]).join("; ");
+}
+
+/** Signs in with email and password and returns the cookie header. */
+async function signIn(email: string): Promise<string> {
+  const { auth } = await import("@/lib/auth/auth");
+  const res = await auth.api.signInEmail({
+    body: { email, password: "correct-horse-battery" },
+    headers: new Headers({ origin: "http://localhost:3000" }),
+    returnHeaders: true,
+  });
+  const setCookie = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie") ?? ""];
+  return setCookie.map((c) => c.split(";")[0]).join("; ");
+}
+
+describe("accounts mode", () => {
+  it("refuses sign-up without the invite code", async () => {
+    await expect(signUp("nocode@x.dev", null)).rejects.toThrow(/invite code/i);
+    await expect(signUp("wrongcode@x.dev", "guess")).rejects.toThrow(/invite code/i);
+  });
+
+  it("signs up with the code, and the session cookie identifies the user", async () => {
+    const cookie = await signUp("ada@x.dev", "club-2026");
+    expect(cookie).toMatch(/session_token=/);
+    const { getCurrentUser, requireUser } = await import("@/lib/auth/session");
+
+    requestHeaders = new Headers({ cookie });
+    expect(await getCurrentUser()).toMatchObject({ email: "ada@x.dev", emailVerified: false });
+
+    requestHeaders = new Headers();
+    expect(await getCurrentUser()).toBeNull();
+    await expect(requireUser()).rejects.toThrow("redirect:/signin");
+  });
+
+  it("keeps each user's interviews to themselves", async () => {
+    const cookieA = await signUp("grace@x.dev", "club-2026");
+    const cookieB = await signUp("linus@x.dev", "club-2026");
+    const { getCurrentUser } = await import("@/lib/auth/session");
+    requestHeaders = new Headers({ cookie: cookieA });
+    const a = (await getCurrentUser())!;
+    requestHeaders = new Headers({ cookie: cookieB });
+    const b = (await getCurrentUser())!;
+    expect(a.id).not.toBe(b.id);
+
+    const { setRecordingConsent } = await import("@/lib/privacy");
+    const mock = await import("@/lib/mock");
+    await setRecordingConsent(a.id, true);
+    const id = await mock.createMockSession(a.id, {
+      slug: "pair-with-target-sum",
+      config: { persona: "neutral", minutes: 30, hintsAllowed: true, company: null },
+      language: "python",
+    });
+    expect(await mock.getMockSession(id, a.id)).not.toBeNull();
+    expect(await mock.getMockSession(id, b.id)).toBeNull();
+  });
+
+  it("verifies the email when GitHub is linked to a password account (Settings → Link GitHub)", async () => {
+    const { auth } = await import("@/lib/auth/auth");
+    const { getCurrentUser } = await import("@/lib/auth/session");
+    const { isAdmin } = await import("@/lib/research/admin");
+    const { db, schema } = await import("@/lib/db");
+    process.env.ADMIN_EMAILS = "hopper@x.dev,ghonly@x.dev";
+    const cookie = await signUp("hopper@x.dev", "club-2026");
+    requestHeaders = new Headers({ cookie });
+    const before = (await getCurrentUser())!;
+    expect(before.emailVerified).toBe(false);
+    expect(isAdmin(before)).toBe(false);
+
+    // Better Auth's link callback (Settings → Link GitHub) stores the account with internalAdapter.createAccount
+    // once GitHub confirmed the matching, verified email; linkAccount here goes through the same
+    // `account.create.after` hook, so it stands in for that callback.
+    const ctx = await auth.$context;
+    await ctx.internalAdapter.linkAccount({ userId: before.id, providerId: "github", accountId: "gh-hopper" });
+    const after = (await getCurrentUser())!;
+    expect(after.emailVerified).toBe(true);
+    expect(isAdmin(after)).toBe(true);
+
+    // Other providers, and a GitHub login with no password account behind it, change nothing.
+    await db.insert(schema.user).values({ id: "u-ghonly", name: "G", email: "ghonly@x.dev" });
+    await ctx.internalAdapter.linkAccount({ userId: "u-ghonly", providerId: "github", accountId: "gh-only" });
+    const cookie2 = await signUp("gitlab@x.dev", "club-2026");
+    requestHeaders = new Headers({ cookie: cookie2 });
+    const other = (await getCurrentUser())!;
+    await ctx.internalAdapter.linkAccount({ userId: other.id, providerId: "gitlab", accountId: "gl-1" });
+    const { eq } = await import("drizzle-orm");
+    const verified = async (id: string) => (await db.select().from(schema.user).where(eq(schema.user.id, id)))[0].emailVerified;
+    expect(await verified("u-ghonly")).toBe(false);
+    expect(await verified(other.id)).toBe(false);
+    requestHeaders = new Headers();
+  });
+
+  it("keeps Better Auth's account-linking checks that the GitHub verify hook relies on", async () => {
+    // verifyEmailOnGitHubLink is safe only because Better Auth refuses a link unless GitHub reports
+    // the same, verified email, and won't link implicitly to an unverified local account. Turning on
+    // `allowDifferentEmails`, trusted providers or other accountLinking options would break that.
+    const { auth } = await import("@/lib/auth/auth");
+    expect((auth.options as { account?: { accountLinking?: unknown } }).account?.accountLinking).toBeUndefined();
+    expect((await auth.$context).trustedProviders).not.toContain("github");
+  });
+
+  it("hides the admin pages (/stats, /research) from everyone else", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { requireAdmin } = await import("@/lib/research/admin");
+    const { getCurrentUser } = await import("@/lib/auth/session");
+    process.env.ADMIN_EMAILS = "hopper@x.dev";
+    // hopper@x.dev was verified by linking GitHub in the test above.
+    requestHeaders = new Headers({ cookie: await signUp("visitor@x.dev", "club-2026") });
+    await expect(requireAdmin()).rejects.toThrow("not-found");
+    requestHeaders = new Headers();
+    await expect(requireAdmin()).rejects.toThrow("redirect:/signin");
+    requestHeaders = new Headers({ cookie: await signIn("hopper@x.dev") });
+    expect((await getCurrentUser())?.email).toBe("hopper@x.dev");
+    expect((await requireAdmin()).email).toBe("hopper@x.dev");
+    requestHeaders = new Headers();
+    // Both pages call it before reading anything: it's the first thing they await.
+    for (const page of ["src/app/stats/page.tsx", "src/app/research/page.tsx"]) {
+      const src = readFileSync(path.join(process.cwd(), page), "utf8");
+      expect(src.match(/await [^;]+;/)?.[0], page).toBe("await requireAdmin();");
+    }
+  });
+
+  it("only treats GitHub-verified ADMIN_EMAILS as research reviewers", async () => {
+    process.env.ADMIN_EMAILS = "ada@x.dev";
+    const { isAdmin } = await import("@/lib/research/admin");
+    expect(isAdmin({ email: "ada@x.dev", emailVerified: false })).toBe(false);
+    expect(isAdmin({ email: "ada@x.dev", emailVerified: true })).toBe(true);
+    expect(isAdmin({ email: "grace@x.dev", emailVerified: true })).toBe(false);
+  });
+});

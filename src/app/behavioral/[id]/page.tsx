@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { generateRoundReportAction } from "@/app/rounds/actions";
+import { RecordingDeleted } from "@/components/RecordingDeleted";
 import { RoundReportView } from "@/components/rounds/RoundReportView";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { behavioralKind } from "@/lib/behavioral";
@@ -20,6 +21,16 @@ export default async function BehavioralRoundPage({ params }: PageProps<"/behavi
   if (!round || round.kind !== "behavioral") notFound();
   const topic = BEHAVIORAL_TOPIC_BY_ID.get(round.topicId);
   if (!topic) notFound();
+  if (round.purgedAt) {
+    return (
+      <RecordingDeleted
+        title={topic.title}
+        what="round's transcript, notes and report"
+        purgedAt={round.purgedAt}
+        note="Your story bank is kept: it isn't a recording, and you can edit or delete stories there."
+      />
+    );
+  }
   const parsed = behavioralArtifactSchema.safeParse(round.artifact);
   const artifact = parsed.success ? parsed.data : behavioralKind.initialArtifact(topic.id);
   const companyName = round.config.company ? (COMPANY_BY_ID[round.config.company]?.name ?? null) : null;

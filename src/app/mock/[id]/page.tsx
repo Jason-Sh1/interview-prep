@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { RecordingDeleted } from "@/components/RecordingDeleted";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { isDiagnosticMock } from "@/lib/diagnostic";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
@@ -21,6 +22,16 @@ export default async function MockSessionPage({ params }: PageProps<"/mock/[id]"
   if (!session) notFound();
   const problem = PROBLEM_BY_SLUG.get(session.problemSlug);
   if (!problem) notFound();
+  if (session.purgedAt) {
+    return (
+      <RecordingDeleted
+        title={problem.title}
+        what="interview's transcript, code timeline and report"
+        purgedAt={session.purgedAt}
+        note="What it changed in your plan stays."
+      />
+    );
+  }
   const events = await getEvents(id);
   const companyName = session.config.company ? (COMPANY_BY_ID[session.config.company]?.name ?? null) : null;
 

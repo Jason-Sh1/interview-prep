@@ -407,6 +407,10 @@ describe("behavioral rounds in the engine", () => {
     const artifact = await stories.behavioralStartArtifact(userId, "amazon-lp", 20, "amazon");
     expect(artifact.questionIds).toHaveLength(3);
     expect(artifact.stories[0].title).toMatch(/^Led the migration/);
+    // A round records a transcript, so it needs recording consent first.
+    const privacy = await import("@/lib/privacy");
+    await expect(rounds.createRound(userId, "behavioral", "amazon-lp", { ...config, minutes: 20 }, artifact)).rejects.toThrow(privacy.ConsentRequiredError);
+    await privacy.setRecordingConsent(userId, true);
     const id = await rounds.createRound(userId, "behavioral", "amazon-lp", { ...config, minutes: 20 }, artifact);
     let round = (await rounds.getRound(id, userId))!;
     const opening = await drain(rounds.runRoundTurn(round, { kind: "start" }));

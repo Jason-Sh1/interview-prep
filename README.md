@@ -50,22 +50,29 @@ The one worth adding first is `ANTHROPIC_API_KEY` (from [console.anthropic.com](
 
 ### Deploying it
 
-To use it from any device, deploy to [Vercel](https://vercel.com) (free tier works): import the GitHub repo, and set these environment variables in the project settings before the first deploy:
+To use it from any device, or to share it with others, deploy to [Vercel](https://vercel.com) with a [Neon](https://neon.tech) database (free tiers work). **[DEPLOY.md](DEPLOY.md) is the step-by-step checklist.** In short:
 
-- `DATABASE_URL`: a hosted Postgres such as [Neon](https://neon.tech) or [Supabase](https://supabase.com). Required, because the embedded database can't persist on Vercel. Tables are created automatically on startup.
-- `BETTER_AUTH_SECRET` (generate with `openssl rand -base64 32`) and `BETTER_AUTH_URL` (your site's address, e.g. `https://your-app.vercel.app`).
-- `CRON_SECRET` for the weekly research job in `vercel.json`, and `ADMIN_EMAILS` plus GitHub sign-in if you want to review research in production.
+- `DATABASE_URL` (Neon's pooled connection string), `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL` are required; the server won't start on Vercel without them.
+- A deployed site turns accounts on (email and password). Set `SIGNUP_INVITE_CODE` so only people you give the code to can sign up and use your API key.
+- `CRON_SECRET` turns on the two scheduled jobs in `vercel.json`: the weekly research run and the daily retention cleanup.
+- Every setting is listed, with empty values, in [.env.example](.env.example).
 
-A deployed site is on the internet, so on Vercel the app turns accounts back on: you sign up once with an email and password, and nobody else can use your API keys. On other hosts, set `AUTH_MODE=accounts` yourself. `AUTH_MODE=single` forces single-user mode anywhere, which leaves the site open to anyone with the address.
-- `ANTHROPIC_API_KEY` and any other optional keys from `.env.example`.
+Every push to `main` then redeploys. The LiveKit voice agent in `agent/` is a separate long-running process and can't run on Vercel; without it, mocks use browser voice.
 
-Every push to `main` then redeploys automatically. The LiveKit voice agent in `agent/` is a separate long-running process and can't run on Vercel; without it, mocks use browser voice.
+### Privacy
+
+- **Consent before recording:** the first mock interview asks for explicit consent to save its transcript, code and test runs. Audio is never stored. The server refuses to start a mock without consent.
+- **Retention:** a daily job deletes recordings (mock transcripts, timelines and reports, and AI-round chats and files) older than `RETENTION_DAYS` (default 90), keeping only a content-free note that the session happened.
+- **Delete my data:** Settings can delete all recordings now, or the account and every row stored with it.
+- **Analytics:** admins see weekly active users and completed sessions at `/stats`, counted from the app's own tables. There are no tracking scripts or analytics cookies.
+- The public [privacy page](src/app/privacy/page.tsx) (`/privacy`) explains all of this to users; code in `src/lib/privacy.ts`.
 
 ### Development checks
 
 ```bash
 npm test             # engine and test-runner unit tests, plus every reference solution
 npm run validate:bank
+npm run eval:feedback  # feedback-quality eval (offline; see evals/feedback)
 npm run lint
 npm run typecheck
 ```
@@ -87,6 +94,8 @@ npm run typecheck
 | AI-assisted rounds | Tasks, assistant, harness and grading in `src/lib/assisted` | Pages in `src/app/assisted`, API in `src/app/api/assisted` |
 | Conversation rounds | Shared engine (turns, time box, grading, Today suggestions) in `src/lib/rounds`; system design in `src/lib/design`; behavioral in `src/lib/behavioral` | Hub `src/app/rounds`, pages `src/app/design` and `src/app/behavioral`, API `src/app/api/rounds` |
 | Voice agent | LiveKit Agents worker, its own package | `agent/` |
+| Privacy and usage | Consent, retention, deletion in `src/lib/privacy.ts`; weekly counts in `src/lib/analytics.ts` | Pages `src/app/settings`, `src/app/privacy`, `src/app/stats` |
+| Feedback eval | 24 labeled simulated mocks, precision/recall, replayed Claude grades | `evals/feedback`, results in [RESULTS.md](RESULTS.md) |
 
 ### The learning engine (spec 4.2)
 
@@ -134,7 +143,7 @@ When a mock ends, its recap page builds a report from the recorded timeline:
 - **Key moments** you can click to jump the replay to, a **hire signal** (strong no to strong hire) with reasons, calibrated by company and level, and the **top three focus areas** with drills.
 - **Fed back into your plan**: a weak mock lowers that pattern's rating (a mock never raises it; practice attempts do that), and an unsolved or shaky problem comes back as a re-solve due today.
 
-The numbers always come from `feedback/analyze.ts`, which is rule-based. With `ANTHROPIC_API_KEY` set, `feedback/claude.ts` also sends the transcript, test runs, code at key moments and those numbers to Claude (`claude-opus-5-5`, structured output) to write the rubric, hire signal and focus areas; if that call fails, the rule-based report is used. Reports are stored in `feedback_reports` and built once per interview.
+How good is the feedback? `npm run eval:feedback` scores it against 24 labeled simulated interviews; see [RESULTS.md](RESULTS.md) and [evals/feedback](evals/feedback/README.md). The numbers always come from `feedback/analyze.ts`, which is rule-based. With `ANTHROPIC_API_KEY` set, `feedback/claude.ts` also sends the transcript, test runs, code at key moments and those numbers to Claude (`claude-opus-5-5`, structured output) to write the rubric, hire signal and focus areas; if that call fails, the rule-based report is used. Reports are stored in `feedback_reports` and built once per interview.
 
 ### AI-assisted coding rounds (spec 4.5)
 
@@ -168,7 +177,7 @@ System design, behavioral and code walkthrough rounds are timed conversations wi
 Company profiles (each company's pattern mix, loop, and AI tool policy) are versioned in `company_profiles`. Version 1 of each is the hand estimate in `engine/companies.ts`.
 
 - **Research runs** (`research/claude.ts`, needs `ANTHROPIC_API_KEY`): for each company, Claude (`claude-opus-5-5`, override with `RESEARCH_MODEL`) searches the web for reports from the last 12 months and writes notes with sources. A second call turns the notes into a structured profile. Any source that wasn't actually returned by a search is dropped, and a profile with no verified source is discarded.
-- **Review queue** (`/research`): a profile that changes something (an AI policy, a pattern weight moving by 0.15 or more, a new loop description or note) waits there as a pending version, showing what changed, a before/after view and its sources. Approving it updates every user's plan and the skill map. A profile that still holds just gets its "last verified" date and sources refreshed. In single-user mode, you are the reviewer. With accounts, reviewers are the emails in `ADMIN_EMAILS`, signed in with GitHub so the address is verified (email and password accounts aren't); with that unset, anyone signed in can review in development, and nobody can in production.
-- **Schedule**: `vercel.json` calls `/api/cron/research` every Monday, authorized by `CRON_SECRET`. Any scheduler can call it the same way, with `Authorization: Bearer $CRON_SECRET`. Run it by hand from `/research` or with `npm run research [company-id ...]`.
+- **Review queue** (`/research`): a profile that changes something (an AI policy, a pattern weight moving by 0.15 or more, a new loop description or note) waits there as a pending version, showing what changed, a before/after view and its sources. Approving it updates every user's plan and the skill map. A profile that still holds just gets its "last verified" date and sources refreshed. In single-user mode, you are the reviewer. With accounts, reviewers are the emails in `ADMIN_EMAILS`, with the address verified through GitHub, by signing in with GitHub or linking it in Settings (email and password accounts alone aren't verified); with that unset, anyone signed in can review in development, and nobody can in production.
+- **Schedule**: `vercel.json` calls `/api/cron/research` every weekday morning, authorized by `CRON_SECRET`. Each call researches the companies not done in the last 6 days, oldest first, and on Vercel stops starting new ones after 150 seconds so it fits the Hobby plan's 300-second limit; the rest go first the next weekday, so each company is still researched about once a week. Any scheduler can call it the same way, with `Authorization: Bearer $CRON_SECRET`. Run it by hand from `/research` or with `npm run research [company-id ...]`.
 - **What users see**: a "What's new in interviews" panel on Today for approved changes from the last 45 days (target companies first), and "verified" dates with sources on the skill map.
 

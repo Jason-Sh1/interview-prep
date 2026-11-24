@@ -1,0 +1,106 @@
+# Deploying to Vercel + Neon
+
+A checklist to put Interview Prep online for real users (for example, Claude Builder Club members). Follow it top to bottom. It takes about 30 minutes, and everything in it fits in the free tiers. Nothing here has been done for you: you create the accounts and paste the values.
+
+You need: the GitHub repo (`Jason-Sh1/interview-prep`), a terminal with `openssl` (Git Bash on Windows has it), and a browser.
+
+## 1. Create the database (Neon)
+
+1. Sign up at [neon.tech](https://neon.tech) (free plan; signing in with GitHub works).
+2. **Create project** → name it `interview-prep`. Pick the region closest to your users (for example `AWS US East (N. Virginia)`) and remember it: Vercel's functions should run in the same region (step 3.6).
+3. On the project dashboard, click **Connect**, keep the defaults (branch `main`, database `neondb`), turn **Connection pooling on**, and copy the connection string. It looks like `postgresql://neondb_owner:…@ep-…-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require`.
+4. Keep it somewhere private for step 3. Don't paste it into any file in the repo.
+
+You don't need to create tables: the app applies its migrations on startup.
+
+## 2. Generate the secrets
+
+Run each of these once, and keep the outputs for step 3:
+
+```bash
+openssl rand -base64 32   # BETTER_AUTH_SECRET
+openssl rand -hex 32      # CRON_SECRET
+openssl rand -hex 6       # SIGNUP_INVITE_CODE (or pick a phrase you'll share with the club)
+```
+
+## 3. Create the Vercel project
+
+1. Sign up at [vercel.com](https://vercel.com) with GitHub (Hobby plan, free).
+2. **Add New… → Project** → import `Jason-Sh1/interview-prep`. Framework preset: Next.js (detected). Leave the build settings as they are.
+3. Before clicking Deploy, open **Environment Variables** and add these for **Production** only. Don't give Preview the production `DATABASE_URL`: see "Preview deploys" in step 7.
+
+   | Name | Value |
+   |---|---|
+   | `DATABASE_URL` | the Neon pooled connection string from step 1 |
+   | `BETTER_AUTH_SECRET` | the base64 secret from step 2 |
+   | `BETTER_AUTH_URL` | `https://<project-name>.vercel.app` (the domain Vercel shows; update it if you add a custom domain) |
+   | `SIGNUP_INVITE_CODE` | the invite code from step 2 |
+   | `CRON_SECRET` | the hex secret from step 2 |
+   | `RETENTION_DAYS` | `90` (or shorter if you prefer) |
+   | `ADMIN_EMAILS` | your email, to use `/research` and `/stats` (needs GitHub sign-in, step 5) |
+
+   Leave `AUTH_MODE` unset: on Vercel the app requires accounts by default. Leave `ANTHROPIC_API_KEY` unset for now (step 6).
+4. Click **Deploy**. When it finishes, open the site. If a required setting is missing, the function logs (Project → **Logs**) show a `Missing production settings` message naming it.
+5. Back in the project, open **Settings → Cron Jobs** and check both jobs are listed: `/api/cron/research` (weekday mornings) and `/api/cron/retention` (daily). They're read from `vercel.json`.
+6. Under **Settings → Functions**, set **Function Region** to the same region as the Neon database, then redeploy (Deployments → ⋯ → Redeploy).
+
+## 4. Check it works
+
+1. Open the site: you should get the landing page with **Get started**.
+2. Create an account with the invite code. Trying without it (or with a wrong one) should say the code isn't right.
+3. Set goals → the diagnostic page shows step 2 of 3 → skip it → **Today** shows your plan.
+4. Go to **Mock interview**: the consent box appears. Tick it, start, say something or type, end the interview, and check the report appears.
+5. **Settings**: consent shows as on; **Delete all my recordings now** works; the privacy link opens `/privacy`.
+6. Check the retention job is protected (replace the URL and secret):
+
+   ```bash
+   curl -i https://<your-app>.vercel.app/api/cron/retention                       # expect 401
+   curl -i -H "Authorization: Bearer <CRON_SECRET>" https://<your-app>.vercel.app/api/cron/retention   # expect 200 and {"retentionDays":90,...}
+   ```
+
+7. Optional: make a throwaway account and use **Delete everything** in Settings to check it signs you out and the account is gone.
+
+## 5. Optional: GitHub sign-in (needed for admin pages)
+
+Admin pages (`/research`, `/stats`) need an email verified by GitHub, so password accounts can't claim your address.
+
+1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**.
+   - Homepage URL: `https://<your-app>.vercel.app`
+   - Authorization callback URL: `https://<your-app>.vercel.app/api/auth/callback/github`
+2. Copy the Client ID, generate a client secret, and add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in Vercel, then redeploy.
+3. With an invite code set, GitHub only signs in **existing** accounts. So sign up with email and password first, using the email GitHub reports for you, then go to **Settings → Link GitHub**. That's the public email on your GitHub profile when you've set one, otherwise your primary email; linking only works when it's the same address as your account's and verified on GitHub. Once linked, your email counts as verified, `/research` and **Usage** appear in the menu, and **Continue with GitHub** signs you in.
+4. **Do this before you share the invite code.** Anyone with the code can sign up with any address, including the one in `ADMIN_EMAILS`. They don't get admin (that needs the GitHub-verified email), but the address is then taken: you can't sign up with it, and there's no way to reset it short of deleting that row in the database.
+
+## 6. Optional: turn on Claude (when you have an API key)
+
+Without a key, every feature works with its scripted or rule-based fallback. With one, Claude runs the interviewer, the feedback grader, the round assistants, review variants and the research job, and every user's use is charged to your key.
+
+1. At [console.anthropic.com](https://console.anthropic.com): create a key, then under **Limits** set a **monthly spend limit** that fits the budget (for example $15, leaving room for evals). That limit is the real cap; the app has no per-user quota yet.
+2. Add `ANTHROPIC_API_KEY` in Vercel and redeploy.
+3. What a mock interview, its report or any other feature costs per use is not measured yet. Watch the console's usage page for the first week, and keep the invite code set so only club members can sign up.
+4. To measure the Claude grader once (its cost is not measured yet; the spend limit caps it): locally, put the key in `.env.local` and run `npm run eval:feedback -- --record`. Commit the recordings under `evals/feedback/recordings/` and the new results, and update RESULTS.md.
+
+## 7. Day to day
+
+- Every push to `main` redeploys.
+- **Preview deploys:** every pull request gets one, and the app applies pending migrations when a server starts (`src/instrumentation.ts`). So a preview that shares the production `DATABASE_URL` would migrate the production database as soon as it starts, before the pull request is merged. Either leave `DATABASE_URL` unset for Preview (previews then refuse to start with a "Missing production settings" message, which is safe), or give Preview its own database: in Neon, **Branches → New branch** (for example `preview`), copy that branch's pooled connection string, and set it as Preview's `DATABASE_URL` in Vercel. A working preview also needs its own `BETTER_AUTH_SECRET` and a `BETTER_AUTH_URL` set to the preview's address; without one, Better Auth uses the production domain, so sign-in on the preview will probably be refused (not tried yet).
+- **Forgotten passwords:** there's no password reset yet, because it needs an email-sending service (another account and secret). A member who linked GitHub can use **Continue with GitHub**. Otherwise the only fix today is for you to delete their row in Neon's SQL editor (`delete from "user" where email = '…';`, which deletes all their data through the cascades), so they can sign up again.
+- To invite people, share the site URL and the invite code, but only after you've signed up and linked GitHub with your `ADMIN_EMAILS` address (step 5.4). To stop new sign-ups, change `SIGNUP_INVITE_CODE` and redeploy.
+- Usage: `/stats` (admins) shows weekly active users and completed sessions.
+- The LiveKit voice agent (`agent/`) can't run on Vercel. Without it, mocks use the browser's voice, which is fine for most users.
+
+## 8. First deploy: things only a real deploy can confirm
+
+These haven't been observed yet, because nothing has been deployed. Check each one on the first deploy and fix this file if it's wrong.
+
+1. **Migrations are bundled.** The app reads `drizzle/` at startup; `next.config.ts` adds it to every function with `outputFileTracingIncludes`. On the first request, the function logs should show no `ENOENT` or "Can't find meta/_journal.json" error, and Neon's **Tables** view should list the app's tables and `drizzle.__drizzle_migrations`.
+2. **Two cold starts on an empty database.** Two servers starting at once can race on the first migration. The loser waits two seconds and retries once, and a failure isn't remembered, so the next request tries again. A single "Database migration failed; retrying once" warning is fine; repeated failures aren't.
+3. **What a startup error looks like.** With a required setting missing, `register()` throws "Missing production settings". How Vercel shows that (an error page, a 500, or only a log line) hasn't been seen. Try it once on a preview by leaving out `BETTER_AUTH_SECRET`.
+4. **The 300-second limit.** The research routes set `maxDuration = 300`, Hobby's maximum. After the first research run, open `/research` and note how many companies were researched and how many were "left for the next run". One company's research time hasn't been measured.
+5. **Retention without the cron job.** After a signed-in page load, the purge runs in `after()` at most once a day per server instance. When something has expired, the logs show `[retention] purged expired recordings`.
+6. **Rate limits see real client addresses.** In Neon, look at the `rate_limit` table after a few sign-ins from different networks: the keys should hold different IP addresses. Better Auth only trusts `x-forwarded-for` when it holds exactly one address; otherwise it logs "Rate limiting could not determine a client IP" and every request shares one bucket whose key starts with the literal `no-trusted-ip`. If you see `no-trusted-ip` keys, the per-IP limit is acting as one limit for everyone, so 30 sign-in attempts a minute from anyone block all sign-ins; set `advanced.ipAddress.ipAddressHeaders` in `src/lib/auth/auth.ts` (not set today) to a header that holds only the client address, such as Vercel's `x-real-ip` (check it on the deploy first).
+7. **Known gap: no per-account sign-in limit.** Sign-in guessing is capped only per IP address (30 a minute), not per account, so someone with many addresses can keep guessing one account's password. A per-email failed-sign-in limit isn't built yet.
+
+## Settings reference
+
+Every setting, with what it does, is in [.env.example](.env.example). Required on Vercel: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (or the default Vercel domain). Strongly recommended: `SIGNUP_INVITE_CODE`, `CRON_SECRET` (without it the research job never runs; expired recordings are still deleted, by a once-a-day check when someone uses the site).

@@ -21,6 +21,8 @@ import {
 } from "@/lib/behavioral/stories";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { PERSONAS } from "@/lib/interview/types";
+import { startOrAskConsent } from "@/lib/consent-redirect";
+import { setRecordingConsent } from "@/lib/privacy";
 import { createRound, getRound } from "@/lib/rounds";
 import { getGoals } from "@/lib/track";
 
@@ -38,14 +40,13 @@ const startSchema = z.object({
 export async function startBehavioralRoundAction(form: FormData) {
   const user = await requireUser();
   const p = startSchema.parse({ topic: form.get("topic"), minutes: form.get("minutes"), persona: form.get("persona") ?? "neutral", company: form.get("company") ?? "" });
+  // First round: the consent checkbox comes with the form. createRound refuses without consent.
+  if (form.get("consent") === "on") await setRecordingConsent(user.id, true);
   const goals = await getGoals(user.id);
   const artifact = await behavioralStartArtifact(user.id, p.topic, p.minutes, p.company);
-  const id = await createRound(
-    user.id,
-    "behavioral",
-    p.topic,
-    { minutes: p.minutes, persona: p.persona, company: p.company, level: goals?.level ?? "mid" },
-    artifact,
+  const id = await startOrAskConsent(
+    () => createRound(user.id, "behavioral", p.topic, { minutes: p.minutes, persona: p.persona, company: p.company, level: goals?.level ?? "mid" }, artifact),
+    "/behavioral",
   );
   redirect(`/behavioral/${id}`);
 }

@@ -158,3 +158,6 @@ next-env.d.ts
 
 # Copied from node_modules by scripts/copy-vendor.mjs
 /public/vendor/
+
+# Browser automation snapshots
+.playwright-mcp/

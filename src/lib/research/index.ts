@@ -241,15 +241,53 @@ export async function startRun(trigger: "cron" | "manual" | "cli"): Promise<Rese
 
 const PARALLEL = 3;
 
+/**
+ * Vercel's Hobby plan stops a function after 300 seconds (the routes set
+ * maxDuration = 300). A run there stops starting new companies after half of
+ * that, leaving the other half for the companies already in flight. How long
+ * one company takes hasn't been measured yet; see DEPLOY.md. Elsewhere (the CLI,
+ * a long-running server) there's no limit.
+ */
+export const VERCEL_RESEARCH_BUDGET_MS = 150_000;
+export const researchBudgetMs = (env: Record<string, string | undefined> = process.env) => (env.VERCEL ? VERCEL_RESEARCH_BUDGET_MS : undefined);
+
+export interface RunOptions {
+  /** Stop starting companies after this long; the rest are recorded as "deferred" and go first next time. */
+  budgetMs?: number;
+  /** Leave out companies researched within this many days (the weekday cron, so each runs about once a week). */
+  skipFreshDays?: number;
+  /** For tests. */
+  clock?: () => number;
+}
+
+/** Every company, the longest since it was last researched first (never researched before all). */
+async function researchOrder(skipFreshDays: number | undefined, now: number): Promise<string[]> {
+  const rows = await db
+    .select({ companyId: schema.companyProfiles.companyId, last: sql<Date | null>`max(${schema.companyProfiles.verifiedAt})`.mapWith(schema.companyProfiles.verifiedAt) })
+    .from(schema.companyProfiles)
+    .groupBy(schema.companyProfiles.companyId);
+  const last = new Map(rows.map((r) => [r.companyId, r.last?.getTime() ?? 0]));
+  const cutoff = skipFreshDays === undefined ? Infinity : now - skipFreshDays * 86_400_000;
+  return COMPANIES.map((c) => c.id)
+    .filter((id) => (last.get(id) ?? 0) < cutoff)
+    .sort((a, b) => (last.get(a) ?? 0) - (last.get(b) ?? 0));
+}
+
 /** Researches every company (or the given ones) for a run created by startRun. */
-export async function executeRun(runId: number, companyIds?: string[]): Promise<ResearchRun> {
+export async function executeRun(runId: number, companyIds?: string[], opts: RunOptions = {}): Promise<ResearchRun> {
+  const clock = opts.clock ?? Date.now;
+  const started = clock();
   await seedProfiles();
   const approved = await freshApproved();
-  const ids = (companyIds?.length ? companyIds : COMPANIES.map((c) => c.id)).filter((id) => COMPANY_BY_ID[id]);
+  const ids = (companyIds?.length ? companyIds : await researchOrder(opts.skipFreshDays, started)).filter((id) => COMPANY_BY_ID[id]);
   const results: ResearchRun["results"] = [];
   const queue = [...ids];
   const worker = async () => {
     for (let id = queue.shift(); id; id = queue.shift()) {
+      if (opts.budgetMs !== undefined && clock() - started > opts.budgetMs) {
+        results.push({ companyId: id, result: "deferred" });
+        continue;
+      }
       try {
         results.push({ companyId: id, result: await researchOne(runId, id, approved.get(id)) });
       } catch (e) {
@@ -338,10 +376,10 @@ export async function saveQuestions(profileId: number, companyId: string, questi
 }
 
 /** Starts and finishes a run in one call (the CLI and cron). */
-export async function runResearch(trigger: "cron" | "manual" | "cli", companyIds?: string[]): Promise<ResearchRun | null> {
+export async function runResearch(trigger: "cron" | "manual" | "cli", companyIds?: string[], opts?: RunOptions): Promise<ResearchRun | null> {
   const run = await startRun(trigger);
   if (!run || run.status !== "running") return run;
-  return executeRun(run.id, companyIds);
+  return executeRun(run.id, companyIds, opts);
 }
 
 export async function pendingCount(): Promise<number> {

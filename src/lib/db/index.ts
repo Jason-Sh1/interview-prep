@@ -50,9 +50,27 @@ export const db = new Proxy({} as DB, {
   },
 });
 
-/** Applies pending migrations once per process. */
+/**
+ * Applies pending migrations once per process. A failure isn't cached: the next
+ * call tries again. Two servers starting on an empty database can race on the
+ * first migration and one of them fails, so a failed attempt is retried once
+ * after a short wait, by which time the other has usually finished.
+ */
 export function ensureMigrated(): Promise<void> {
-  return (g.__ipdbReady ??= instance().migrate());
+  return (g.__ipdbReady ??= migrateWithRetry(() => instance().migrate()).catch((e: unknown) => {
+    g.__ipdbReady = undefined;
+    throw e;
+  }));
+}
+
+export async function migrateWithRetry(migrate: () => Promise<void>, waitMs = 2_000): Promise<void> {
+  try {
+    await migrate();
+  } catch (e) {
+    console.warn("Database migration failed; retrying once", e);
+    await new Promise((r) => setTimeout(r, waitMs));
+    await migrate();
+  }
 }
 
 export { schema };

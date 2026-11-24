@@ -11,6 +11,7 @@ export function RoundSetup({
   defaultMinutes = 45,
   extra,
   label = "Start",
+  needsConsent = false,
   action = startRoundAction,
 }: {
   kind: RoundKind;
@@ -20,6 +21,8 @@ export function RoundSetup({
   defaultMinutes?: number;
   extra?: React.ReactNode;
   label?: string;
+  /** No recording consent yet: a required checkbox (the page explains what's recorded). */
+  needsConsent?: boolean;
   /** A kind's own start action, when it prepares the round (for example loading your stories). */
   action?: (form: FormData) => Promise<void>;
 }) {
@@ -49,6 +52,12 @@ export function RoundSetup({
           </option>
         ))}
       </select>
+      {needsConsent && (
+        <label className="flex items-center gap-1.5 text-xs">
+          <input type="checkbox" name="consent" required />
+          I agree to recording (see above)
+        </label>
+      )}
       <button className="btn-primary">{label}</button>
     </form>
   );

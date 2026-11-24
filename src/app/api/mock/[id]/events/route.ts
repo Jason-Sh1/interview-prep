@@ -13,7 +13,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/mock/[id]/event
   const { id } = await ctx.params;
   const session = await getMockSession(id, user.id);
   if (!session) return NextResponse.json({ error: "Unknown session" }, { status: 404 });
-  if (session.endedAt) return NextResponse.json({ error: "This interview has ended" }, { status: 409 });
+  if (session.endedAt || session.purgedAt) return NextResponse.json({ error: "This interview has ended" }, { status: 409 });
   const parsed = body.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
   // Events are checked one by one so a single bad one doesn't lose the batch.

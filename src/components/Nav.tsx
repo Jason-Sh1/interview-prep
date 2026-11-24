@@ -17,7 +17,8 @@ export async function Nav() {
     { href: "/rounds", label: "Rounds", match: ["/rounds", "/assisted", "/debug", "/design", "/behavioral", "/walkthrough"] },
     { href: "/progress", label: "Skill map" },
     { href: "/onboarding", label: "Goals" },
-    ...(admin ? [{ href: "/research", label: "Research", badge: pending || undefined }] : []),
+    { href: "/settings", label: "Settings" },
+    ...(admin ? [{ href: "/research", label: "Research", badge: pending || undefined }, { href: "/stats", label: "Usage" }] : []),
   ];
   return (
     <header className="border-b border-line bg-surface">
@@ -28,7 +29,7 @@ export async function Nav() {
         {user && (
           <>
             {/* Wide screens: every link inline. Narrow screens: a menu. */}
-            <div className="hidden min-w-0 items-center gap-1 whitespace-nowrap lg:flex">
+            <div className="hidden min-w-0 items-center gap-1 whitespace-nowrap xl:flex">
               {links.map((l) => (
                 <Link key={l.href} href={l.href} className="btn-ghost">
                   {l.label}

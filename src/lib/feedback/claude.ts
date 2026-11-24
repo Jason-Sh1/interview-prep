@@ -100,13 +100,20 @@ ${report.moments.map((m) => `[${fmtClock(m.t)}] ${m.text}`).join("\n") || "(none
 ${RUBRIC.map((k) => `${k}: ${report.rubric[k].score} (${report.rubric[k].evidence})`).join("\n")}`;
 }
 
-/** Grades the session with Claude and merges the result over the heuristic report. */
-export async function claudeReport(
+export type ClaudeGrade = z.infer<typeof gradeSchema>;
+
+/** Checks a stored grade (the eval's recorded responses) against the schema. */
+export const parseGrade = (value: unknown): ClaudeGrade => gradeSchema.parse(value);
+
+export type GradeContext = { level: string; companyName: string | null; minutes: number };
+
+/** One grading call to Claude; returns its structured grade. */
+export async function requestGrade(
   events: SessionEvent[],
   problem: Problem,
   heuristic: FeedbackReport,
-  ctx: { level: string; companyName: string | null; minutes: number },
-): Promise<FeedbackReport> {
+  ctx: GradeContext,
+): Promise<{ grade: ClaudeGrade; usage: { input_tokens: number; output_tokens: number } }> {
   const res = await getClient().beta.messages.parse({
     model: FEEDBACK_MODEL,
     max_tokens: 16000,
@@ -119,7 +126,11 @@ export async function claudeReport(
   if (res.stop_reason === "refusal") throw new Error("The grading model declined this session");
   const g = res.parsed_output;
   if (!g) throw new Error("The grading model returned no report");
+  return { grade: g, usage: { input_tokens: res.usage.input_tokens, output_tokens: res.usage.output_tokens } };
+}
 
+/** Merges Claude's grade over the heuristic report, keeping the measured numbers. Pure. */
+export function mergeGrade(heuristic: FeedbackReport, g: ClaudeGrade): FeedbackReport {
   const rubric = Object.fromEntries(
     RUBRIC.map((k) => [k, { score: Math.min(4, Math.max(1, Math.round(g.rubric[k].score))), evidence: g.rubric[k].evidence }]),
   ) as FeedbackReport["rubric"];
@@ -142,4 +153,15 @@ export async function claudeReport(
     focus: g.focus.slice(0, 3),
     moments: [...heuristic.moments, ...extra].sort((a, b) => a.t - b.t),
   };
+}
+
+/** Grades the session with Claude and merges the result over the heuristic report. */
+export async function claudeReport(
+  events: SessionEvent[],
+  problem: Problem,
+  heuristic: FeedbackReport,
+  ctx: GradeContext,
+): Promise<FeedbackReport> {
+  const { grade } = await requestGrade(events, problem, heuristic, ctx);
+  return mergeGrade(heuristic, grade);
 }

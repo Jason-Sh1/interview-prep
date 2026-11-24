@@ -3,6 +3,7 @@ import "server-only";
 // behavioral, code walkthrough): create and load rounds, save the artifact,
 // run interviewer turns (Claude or scripted), finish, and build the report.
 
+import { ConsentRequiredError, hasRecordingConsent } from "../privacy";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "../db";
@@ -28,6 +29,8 @@ export interface Round {
   startedAt: Date | null;
   endedAt: Date | null;
   report: RoundReport | null;
+  /** Set when the retention limit deleted the recording. */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.rounds.$inferSelect;
@@ -45,6 +48,7 @@ const fromRow = (r: Row): Round => ({
   startedAt: r.startedAt,
   endedAt: r.endedAt,
   report: (r.report as unknown as RoundReport) ?? null,
+  purgedAt: r.purgedAt,
 });
 
 /** Slack past the time box for a last turn in flight and clock drift. */
@@ -67,6 +71,8 @@ export async function createRound(userId: string, kind: RoundKind, topicId: stri
   await ensureMigrated();
   const def = kindDef(kind);
   if (!def || !def.topics.some((t) => t.id === topicId)) throw new Error("Unknown round topic");
+  // A round records a transcript of the candidate's voice, so it needs consent first.
+  if (!(await hasRecordingConsent(userId))) throw new ConsentRequiredError();
   const id = randomUUID();
   await db.insert(schema.rounds).values({
     id,
@@ -123,11 +129,14 @@ export async function saveArtifact(round: Round, artifact: unknown): Promise<voi
   round.artifact = parsed as Record<string, unknown>;
 }
 
+/** Not recorded once the round's recording was deleted (a turn already in flight). */
+const unpurged = (id: string) => and(eq(schema.rounds.id, id), isNull(schema.rounds.purgedAt));
+
 async function appendTurn(id: string, turn: Turn) {
   await db
     .update(schema.rounds)
     .set({ transcript: sql`${schema.rounds.transcript} || ${JSON.stringify([turn])}::jsonb` })
-    .where(eq(schema.rounds.id, id));
+    .where(unpurged(id));
 }
 
 /**
@@ -169,7 +178,7 @@ export async function* runRoundTurn(round: Round, input: TurnInput, signal?: Abo
     remainingMs: totalMs - now,
     state: row?.stage ?? {},
   });
-  await db.update(schema.rounds).set({ stage: scripted.state }).where(eq(schema.rounds.id, round.id));
+  await db.update(schema.rounds).set({ stage: scripted.state }).where(unpurged(round.id));
 
   let sent = "";
   let finished = false;
@@ -250,6 +259,7 @@ export function generateRoundReport(round: Round): Promise<RoundReport> {
 async function buildReport(id: string): Promise<RoundReport> {
   const [row] = await db.select().from(schema.rounds).where(eq(schema.rounds.id, id));
   if (!row?.endedAt) throw new Error("The round hasn't ended yet");
+  if (row.purgedAt) throw new Error("This round's recording was deleted");
   if (row.report) return row.report as unknown as RoundReport;
   const round = fromRow(row);
   const def = defFor(round);
@@ -269,7 +279,13 @@ async function buildReport(id: string): Promise<RoundReport> {
       console.error("Claude round grading failed; using the rule-based report", e);
     }
   }
-  await db.update(schema.rounds).set({ report: report as unknown as Record<string, unknown> }).where(eq(schema.rounds.id, id));
+  // Not into a round whose recording was deleted while it was being graded.
+  const [saved] = await db
+    .update(schema.rounds)
+    .set({ report: report as unknown as Record<string, unknown> })
+    .where(and(eq(schema.rounds.id, id), isNull(schema.rounds.purgedAt)))
+    .returning({ id: schema.rounds.id });
+  if (!saved) throw new Error("This round's recording was deleted");
   return report;
 }
 

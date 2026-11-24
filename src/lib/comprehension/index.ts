@@ -26,6 +26,8 @@ export interface DebugRound {
   chat: { role: "user" | "assistant"; text: string; t: number }[];
   runs: RunRecord[];
   report: DebugReport | null;
+  /** Set when the recording was deleted (retention limit or Settings). */
+  purgedAt: Date | null;
 }
 
 type Row = typeof schema.debugRounds.$inferSelect;
@@ -45,6 +47,7 @@ function fromRow(r: Row): DebugRound | null {
     chat: r.chat,
     runs: r.runs,
     report: (r.report as unknown as DebugReport) ?? null,
+    purgedAt: r.purgedAt,
   };
 }
 
@@ -143,6 +146,8 @@ export function generateDebugReport(round: DebugRound): Promise<DebugReport> {
 async function buildReport(round: DebugRound): Promise<DebugReport> {
   const [row] = await db.select().from(schema.debugRounds).where(eq(schema.debugRounds.id, round.id));
   if (!row?.endedAt) throw new Error("The round hasn't ended yet");
+  // The recording was deleted: grading the starter files would be a made-up report.
+  if (row.purgedAt) throw new Error("This round's recording was deleted");
   if (row.report) return row.report as unknown as DebugReport;
   const input = {
     task: round.task,
@@ -163,6 +168,12 @@ async function buildReport(round: DebugRound): Promise<DebugReport> {
       console.error("Claude grading failed; using the rule-based report", e);
     }
   }
-  await db.update(schema.debugRounds).set({ report: report as unknown as Record<string, unknown> }).where(eq(schema.debugRounds.id, round.id));
+  // Not into a round whose recording was deleted while it was being graded.
+  const [saved] = await db
+    .update(schema.debugRounds)
+    .set({ report: report as unknown as Record<string, unknown> })
+    .where(and(eq(schema.debugRounds.id, round.id), isNull(schema.debugRounds.purgedAt)))
+    .returning({ id: schema.debugRounds.id });
+  if (!saved) throw new Error("This round's recording was deleted");
   return report;
 }

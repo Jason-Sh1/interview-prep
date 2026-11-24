@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { generateRoundReportAction } from "@/app/rounds/actions";
+import { RecordingDeleted } from "@/components/RecordingDeleted";
 import { RoundReportView } from "@/components/rounds/RoundReportView";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { designKind } from "@/lib/design";
@@ -18,6 +19,7 @@ export default async function DesignRoundPage({ params }: PageProps<"/design/[id
   if (!round || round.kind !== "design") notFound();
   const topic = DESIGN_TOPIC_BY_ID.get(round.topicId);
   if (!topic) notFound();
+  if (round.purgedAt) return <RecordingDeleted title={topic.title} what="round's transcript, whiteboard and report" purgedAt={round.purgedAt} />;
   const parsed = designArtifactSchema.safeParse(round.artifact);
   const artifact = parsed.success ? parsed.data : emptyDesignArtifact();
 

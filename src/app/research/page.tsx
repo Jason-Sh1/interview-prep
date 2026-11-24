@@ -20,8 +20,9 @@ const RUN_TONE: Record<string, "good" | "warn" | "bad" | "neutral" | "accent"> =
   skipped: "neutral",
 };
 
-// Runs started here finish in after(), which is bounded by this route's limit.
-export const maxDuration = 800;
+// Runs started here finish in after(), which is bounded by this route's limit
+// (300 seconds is the most Vercel's Hobby plan allows; see lib/research).
+export const maxDuration = 300;
 
 export default async function ResearchPage() {
   await requireAdmin();
@@ -97,7 +98,7 @@ export default async function ResearchPage() {
 
       <h2 className="mt-8 text-lg font-semibold">Recent runs</h2>
       {runs.length === 0 ? (
-        <p className="mt-1 text-sm text-muted">No runs yet. The weekly run starts Monday mornings once CRON_SECRET is set; you can also run it here or with npm run research.</p>
+        <p className="mt-1 text-sm text-muted">No runs yet. Once CRON_SECRET is set, a run starts each weekday morning and researches the companies not done that week; you can also run it here or with npm run research.</p>
       ) : (
         <ul className="mt-2 space-y-2 text-sm">
           {runs.map((r) => {
@@ -112,6 +113,7 @@ export default async function ResearchPage() {
                   {r.results.length > 0 && (
                     <span className="text-muted">
                       · {count("queued")} to review, {count("unchanged")} unchanged, {failed.length} failed
+                      {count("deferred") > 0 && `, ${count("deferred")} left for the next run (time limit)`}
                     </span>
                   )}
                 </div>

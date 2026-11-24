@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { RecordingDeleted } from "@/components/RecordingDeleted";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { assistedClock, getAssistedEvents, getAssistedSession, modelChoices, visibleChat } from "@/lib/assisted";
 import { toPublicTask } from "@/lib/assisted/tasks";
@@ -11,6 +12,9 @@ export default async function AssistedSessionPage({ params }: PageProps<"/assist
   const { user } = await requireOnboardedUser();
   const session = await getAssistedSession(id, user.id);
   if (!session) notFound();
+  if (session.purgedAt) {
+    return <RecordingDeleted title={session.task.title} what="round's chat, files, explanation and report" purgedAt={session.purgedAt} />;
+  }
   const events = await getAssistedEvents(id);
 
   if (session.endedAt) {

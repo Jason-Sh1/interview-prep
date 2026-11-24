@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Tag } from "@/components/badges";
 import { PastRounds } from "@/components/rounds/PastRounds";
+import { RecordingConsent } from "@/components/RecordingConsent";
 import { RoundSetup } from "@/components/rounds/RoundSetup";
 import { requireOnboardedUser } from "@/lib/auth/require-goals";
 import { coverageMatrix } from "@/lib/behavioral/coverage";
@@ -8,14 +9,16 @@ import { BEHAVIORAL_LENGTHS, BEHAVIORAL_TOPIC_BY_ID, BEHAVIORAL_TOPICS, question
 import { listStories } from "@/lib/behavioral/stories";
 import { COMPANY_BY_ID } from "@/lib/engine/companies";
 import { claudeEnabled } from "@/lib/interview/claude";
+import { getPrivacy } from "@/lib/privacy";
 import { listRounds } from "@/lib/rounds";
 import { startBehavioralRoundAction } from "./actions";
 
 const LEVEL_LABEL = { any: "Any level", "new-grad": "New grad", senior: "Senior+" } as const;
 
-export default async function BehavioralPage() {
+export default async function BehavioralPage({ searchParams }: PageProps<"/behavioral">) {
   const { user, goals } = await requireOnboardedUser();
-  const [rounds, stories] = await Promise.all([listRounds(user.id, "behavioral"), listStories(user.id)]);
+  const { consent } = await searchParams;
+  const [rounds, stories, privacy] = await Promise.all([listRounds(user.id, "behavioral"), listStories(user.id), getPrivacy(user.id)]);
   const done = new Set(rounds.filter((r) => r.endedAt).map((r) => r.topicId));
   const target = goals.targetCompanies[0] ?? null;
   const cov = coverageMatrix(stories, target);
@@ -63,6 +66,12 @@ export default async function BehavioralPage() {
         </p>
       </div>
 
+      {!privacy.recordingConsent && (
+        <div className="mt-6">
+          <RecordingConsent claude={claudeEnabled()} livekit={false} checkbox={false} what="behavioral round" missing={consent === "required"} />
+        </div>
+      )}
+
       <h2 className="mt-8 text-lg font-semibold">Pick a question set</h2>
       <p className="mt-1 text-sm text-muted">
         {BEHAVIORAL_LENGTHS.map((m) => `${m} minutes: ${questionCount(m)} questions`).join(" · ")}, with follow-ups.
@@ -83,6 +92,7 @@ export default async function BehavioralPage() {
               minutes={[...BEHAVIORAL_LENGTHS]}
               defaultMinutes={30}
               action={startBehavioralRoundAction}
+              needsConsent={!privacy.recordingConsent}
             />
           </li>
         ))}

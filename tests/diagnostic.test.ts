@@ -81,6 +81,9 @@ describe("diagnostic flow", () => {
     expect(d.steps).toHaveLength(3);
     expect(d.steps.every((s) => !s.attempt)).toBe(true);
 
+    // The mock records a transcript, so it needs consent first.
+    await expect(diag.startDiagnosticMock(userId, "python")).rejects.toThrow(/agree to recording/);
+    await (await import("@/lib/privacy")).setRecordingConsent(userId, true);
     const mockId = await diag.startDiagnosticMock(userId, "python");
     expect(await diag.startDiagnosticMock(userId, "python")).toBe(mockId);
     expect(await diag.isDiagnosticMock(userId, mockId)).toBe(true);
@@ -127,6 +130,7 @@ describe("diagnostic flow", () => {
     const userId = "u-diag-race";
     await db.insert(schema.user).values({ id: userId, name: "T", email: "diag-race@x.dev" });
     await diag.startDiagnostic(userId);
+    await (await import("@/lib/privacy")).setRecordingConsent(userId, true);
     const [a, b] = await Promise.all([diag.startDiagnosticMock(userId, "python"), diag.startDiagnosticMock(userId, "python")]);
     expect(a).toBe(b);
     expect(await diag.isDiagnosticMock(userId, a)).toBe(true);

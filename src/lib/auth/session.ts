@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { asc } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db, ensureMigrated, schema } from "../db";
 import { auth } from "./auth";
@@ -15,14 +15,21 @@ export interface CurrentUser {
   emailVerified: boolean;
 }
 
-// Single-user mode's user: the first account already in the database, so
-// progress made before this mode existed carries over, or else a built-in one,
-// created once per process because every progress table references user.id.
+// Single-user mode's user: the built-in one if it exists, else the first
+// account already in the database, so progress made before this mode existed
+// carries over, or else a new built-in one, created once per process because
+// every progress table references user.id. "Delete everything" recreates the
+// built-in user (lib/privacy.ts), so it starts over rather than switching to
+// whichever account is next oldest.
 const g = globalThis as unknown as { __ipLocalUser?: Promise<CurrentUser> };
 function localUser(): Promise<CurrentUser> {
   return (g.__ipLocalUser ??= (async () => {
     await ensureMigrated();
-    const [first] = await db.select().from(schema.user).orderBy(asc(schema.user.createdAt)).limit(1);
+    const [first] = await db
+      .select()
+      .from(schema.user)
+      .orderBy(sql`${schema.user.id} = ${LOCAL_USER.id} desc`, asc(schema.user.createdAt))
+      .limit(1);
     if (first) return { id: first.id, name: first.name, email: first.email, emailVerified: first.emailVerified };
     await db.insert(schema.user).values(LOCAL_USER).onConflictDoNothing();
     return { ...LOCAL_USER };
