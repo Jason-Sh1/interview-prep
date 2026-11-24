@@ -44,7 +44,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
       <section className="card mt-4 p-5">
         <h2 className="font-medium">Retention</h2>
         <p className="mt-1 text-sm text-muted">
-          Interview recordings (mock and system design transcripts, code timelines, whiteboards and reports, and the chats and files from AI-assisted and
+          Interview recordings (mock, system design and behavioral transcripts, code timelines, whiteboards and reports, and the chats and files from AI-assisted and
           debugging rounds) are deleted
           automatically {days} days after the session. {retentionSchedule()} Your plan, ratings and solved problems stay until you delete your account.
         </p>
@@ -78,7 +78,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
         <h2 className="font-medium text-bad">Delete all my data</h2>
         <p className="mt-1 text-sm text-muted">
           {isSingleUser()
-            ? "Removes everything stored in this app: goals, progress, attempts, reviews, recordings and reports. You start over from the beginning."
+            ? "Removes your goals, progress, attempts, reviews, recordings and reports. You start over from the beginning."
             : "Removes your account and everything stored with it: goals, progress, attempts, reviews, recordings and reports. This can't be undone."}
         </p>
         <form action={deleteAllDataAction} className="mt-4 flex flex-wrap items-end gap-3">
