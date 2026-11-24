@@ -313,6 +313,9 @@ describe("privacy against the database", () => {
   // holds a user's data has to cascade from it. Checked against the migrated
   // database, so a new table that forgets the cascade (or the foreign key) fails here.
   it("cascades every table that holds user data from user.id", async () => {
+    // Only columns named user_id are checked. A table that keys the user under another name, or
+    // stores their email (company_profiles.reviewed_by, handled by deleteAllUserData), isn't seen
+    // here: add it to this test or to deleteAllUserData by hand.
     const { db } = await import("@/lib/db");
     const { sql } = await import("drizzle-orm");
     const rows = async <T,>(q: import("drizzle-orm").SQL) => {
