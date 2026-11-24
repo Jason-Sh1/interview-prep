@@ -12,6 +12,7 @@ export function RoundSetup({
   extra,
   label = "Start",
   needsConsent = false,
+  action = startRoundAction,
 }: {
   kind: RoundKind;
   topic: string;
@@ -22,10 +23,12 @@ export function RoundSetup({
   label?: string;
   /** No recording consent yet: a required checkbox (the page explains what's recorded). */
   needsConsent?: boolean;
+  /** A kind's own start action, when it prepares the round (for example loading your stories). */
+  action?: (form: FormData) => Promise<void>;
 }) {
   const companies = [...COMPANIES].sort((a, b) => Number(targets.includes(b.id)) - Number(targets.includes(a.id)));
   return (
-    <form action={startRoundAction} className="mt-3 flex flex-wrap items-center gap-2">
+    <form action={action} className="mt-3 flex flex-wrap items-center gap-2">
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="topic" value={topic} />
       {extra}
